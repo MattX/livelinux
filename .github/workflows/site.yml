@@ -1,0 +1,86 @@
+name: site
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  guest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache guest sources and build trees
+        uses: actions/cache@v4
+        with:
+          path: guest/cache
+          key: guest-cache-${{ hashFiles('guest/**') }}
+          restore-keys: |
+            guest-cache-
+
+      - name: Build guest (kernel, initramfs, BTF)
+        run: ./guest/build.sh
+
+      - name: Upload guest artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: guest-out
+          path: guest/out
+          if-no-files-found: error
+
+  web:
+    needs: guest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download guest artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: guest-out
+          path: web/public/guest
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install
+        run: npm ci
+        working-directory: web
+
+      - name: Test
+        run: npm test
+        working-directory: web
+
+      - name: Build
+        run: npm run build
+        working-directory: web
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web/dist
+
+  deploy:
+    needs: web
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
