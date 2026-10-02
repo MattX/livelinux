@@ -3,7 +3,7 @@
 
 import type { Program, Value } from "../api";
 import { rbInorder } from "./rbtree";
-import { asObject, big, s64, tryGet, WalkOpts } from "./util";
+import { asObject, big, s64, tryGet, WalkOpts, hasMember } from "./util";
 
 export interface CfsTask {
   /** task_struct address. */
@@ -26,7 +26,9 @@ export interface CfsTask {
 
 export interface CfsInfo {
   nrRunning: number;
+  /** cfs_rq->min_vruntime, or cfs_rq->zero_vruntime on kernels that renamed it (see minVruntimeField). */
   minVruntime: bigint;
+  minVruntimeField: "min_vruntime" | "zero_vruntime";
   /** Raw cfs_rq->avg_vruntime (sum of key*weight), if present. */
   avgVruntimeRaw?: bigint;
   avgLoad?: bigint;
@@ -90,7 +92,8 @@ function computeAvgVruntime(
 export function cfsRq(cfsRqV: Value, opts: WalkOpts = {}): CfsInfo {
   const cfs = asObject(cfsRqV);
   const prog = cfs.prog;
-  const minVruntime = big(cfs.member("min_vruntime"));
+  const minVruntimeField = hasMember(prog, "struct cfs_rq", "zero_vruntime") ? "zero_vruntime" : "min_vruntime";
+  const minVruntime = big(cfs.member(minVruntimeField));
   const tasks: CfsTask[] = [];
   for (const node of rbInorder(cfs.member("tasks_timeline"), opts)) {
     const se = prog.containerOf(node, "struct sched_entity", "run_node");
@@ -122,6 +125,7 @@ export function cfsRq(cfsRqV: Value, opts: WalkOpts = {}): CfsInfo {
   return {
     nrRunning: cfs.member("nr_running").num(),
     minVruntime,
+    minVruntimeField,
     avgVruntimeRaw: rawAvg,
     avgLoad,
     avgVruntime,

@@ -21,7 +21,7 @@ FLAGS = [
     "SMP", "X86_PAE", "X86_32", "HIGHMEM", "NOHIGHMEM", "VMSPLIT_3G", "RANDOMIZE_BASE",
     "MITIGATION_PAGE_TABLE_ISOLATION", "CGROUP_SCHED", "FAIR_GROUP_SCHED", "SCHED_DEBUG",
     "PREEMPT_VOLUNTARY", "PREEMPT_COUNT", "DEBUG_INFO_DWARF5", "STACKPROTECTOR", "MODULES",
-    "HZ", "PAGE_OFFSET", "PAGE_SIZE_LE_4KB", "X86_CMOV", "M686",
+    "HZ", "PAGE_OFFSET", "X86_CMOV", "M686",
 ]
 
 
@@ -55,6 +55,8 @@ manifest = {
     "arch": "i386",
     "pageOffset": int(page_offset, 16),
     "config": config,
+    # VARs appended to vmlinux.btf by btf-inject.py because pahole cannot encode them
+    "btfSynthesizedVars": ["swapper_pg_dir", "linux_banner", "jiffies"],
     "files": files,
 }
 with open(os.path.join(out, "manifest.json"), "w") as f:

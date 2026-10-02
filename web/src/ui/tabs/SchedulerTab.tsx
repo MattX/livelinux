@@ -29,7 +29,7 @@ export function SchedulerTab({ prog }: InspectorProps) {
                   ["clock", `${rq.clock.toString()} ns`],
                   ["curr", `${name(rq.currAddr)} @ ${fmtHex(rq.currAddr)}`],
                   ["idle", fmtHex(rq.idleAddr)],
-                  ["min_vruntime", cfs.minVruntime.toString()],
+                  [cfs.minVruntimeField, cfs.minVruntime.toString()],
                   ["avg_vruntime", cfs.avgVruntime !== undefined ? cfs.avgVruntime.toString() : "n/a"],
                 ]}
               />

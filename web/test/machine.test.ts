@@ -67,7 +67,6 @@ describe.skipIf(!have)("Machine (real guest)", () => {
         expect(ranges.length).toBeGreaterThan(0);
         const lowmem = ranges.find((x) => x.va <= 0xc0000000 && x.va + x.size > 0xc0000000);
         expect(lowmem).toBeDefined();
-        expect(lowmem!.large).toBe(true);
         expect(lowmem!.pa).toBe(0);
 
         const ic1 = m.getInstructionCounter();

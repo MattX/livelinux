@@ -38,7 +38,7 @@ const emulator = new V86({
   vga_bios: { buffer: buf(resolve(web, "public/bios/vgabios.bin")) },
   bzimage: { buffer: buf(resolve(web, "public/guest/bzImage")) },
   initrd: { buffer: buf(resolve(web, "public/guest/initramfs.cpio.gz")) },
-  cmdline: "console=ttyS0 nokaslr tsc=reliable mitigations=off",
+  cmdline: process.env.SMOKE_CMDLINE ?? "console=ttyS0 nokaslr tsc=reliable mitigations=off",
   autostart: true,
   disable_speaker: true,
   disable_keyboard: true,

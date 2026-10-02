@@ -42,7 +42,7 @@ describe.skipIf(!have)("real vmlinux BTF", () => {
     expect(btf.find("struct list_head")!.size).toBe(8);
     expect(btf.find("unsigned long")).toBeDefined();
     expect(prog.typeId("struct task_struct *")).toBeGreaterThan(0);
-    expect(prog.enumValue("TASK_RUNNING")).toBe(0n);
+    expect(prog.enumValue("PIDTYPE_PID")).toBe(0n);
     expect(btf.findVar("init_task")).toBeDefined();
     expect(prog.offsetOf("struct task_struct", "tasks")).toBeGreaterThan(0);
     // anonymous-member descent

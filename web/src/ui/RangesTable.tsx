@@ -14,7 +14,7 @@ export function RangesTable({ ranges, symbols, onPick }: { ranges: MappedRange[]
         {ranges.length} ranges, {fmtSize(total)} mapped
         {ranges.length > MAX_ROWS ? ` (showing first ${MAX_ROWS})` : ""}
       </div>
-      <div class="tbl-wrap">
+      <div class="tbl-wrap scroll">
         <table>
           <thead>
             <tr>

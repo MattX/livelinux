@@ -8,7 +8,7 @@ import re
 import subprocess
 import sys
 
-REQUIRED_VARS = ["init_task", "runqueues", "swapper_pg_dir", "linux_banner", "jiffies_64", "pcpu_hot"]
+REQUIRED_VARS = ["init_task", "runqueues", "swapper_pg_dir", "linux_banner", "jiffies_64", "jiffies", "pcpu_hot", "init_mm"]
 REQUIRED_STRUCTS = ["task_struct", "mm_struct", "vm_area_struct", "rq", "cfs_rq", "sched_entity", "maple_range_64"]
 
 
@@ -23,10 +23,8 @@ def main(path):
     if missing:
         sys.exit("btf is missing: " + ", ".join(missing))
     for v in REQUIRED_VARS:
-        m = re.search(r"^\[\d+\] VAR '%s' type_id=(\d+) linkage=(\S+)" % re.escape(v), raw, re.M)
+        m = re.search(r"^\[\d+\] VAR '%s' type_id=(\d+),? linkage=(\S+)" % re.escape(v), raw, re.M)
         print(f"  VAR {v}: type_id={m[1]} linkage={m[2]}")
-    # 'jiffies' is a linker alias of jiffies_64 and has no C declaration; report only.
-    print("  VAR jiffies present:", "jiffies" in var_names)
 
 
 if __name__ == "__main__":

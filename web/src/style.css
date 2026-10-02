@@ -235,3 +235,4 @@ td.num, th.num { text-align: right; }
 
 pre.banner { margin: 0; white-space: pre-wrap; word-break: break-word; color: var(--muted); }
 pre.maps { margin: 0; padding: 8px 10px; background: var(--panel-2); border-radius: 6px; overflow-x: auto; font-size: 12px; }
+.tbl-wrap.scroll { max-height: 340px; overflow: auto; }

@@ -208,7 +208,7 @@ export function App() {
         <h1>livelinux<small>Linux i386 in v86</small></h1>
         <div class="controls">
           <button class="primary" disabled={!ready || !!busy} onClick={toggle}>
-            {running ? "⏸ Pause" : "▶ Run"}
+            {running ? "Pause" : "Run"}
           </button>
           <button disabled={!ready || !!busy} onClick={snapshot}>Snapshot</button>
           <button disabled={!ready || !!busy || !hasSnapshot} onClick={restore}>Restore</button>

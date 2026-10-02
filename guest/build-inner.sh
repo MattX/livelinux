@@ -30,6 +30,8 @@ if [ ! -f "$KDIR/.extracted" ]; then
     touch "$KDIR/.extracted"
 fi
 
+# reproducible banner: fixed build number/user/host
+export KBUILD_BUILD_VERSION=1 KBUILD_BUILD_USER=livelinux KBUILD_BUILD_HOST=livelinux
 KMAKE="make -C $KDIR ARCH=i386 CROSS_COMPILE=$CROSS HOSTCC=gcc -j$JOBS"
 
 # Regenerate .config only when the fragment (or the pinned kernel) changed.
@@ -37,7 +39,7 @@ CFG_STAMP="$(sha256sum "$G/kernel.config" | cut -d' ' -f1)"
 if [ ! -f "$KDIR/.config" ] || [ "$(cat "$KDIR/.livelinux-cfg" 2>/dev/null)" != "$CFG_STAMP" ]; then
     echo "== configuring kernel"
     $KMAKE i386_defconfig
-    (cd "$KDIR" && ARCH=i386 CROSS_COMPILE=$CROSS scripts/kconfig/merge_config.sh -m .config "$G/kernel.config") >/dev/null
+    (cd "$KDIR" && ARCH=i386 CROSS_COMPILE=$CROSS scripts/kconfig/merge_config.sh -m .config "$G/kernel.config") 2>&1 | grep -E "^(Value of|WARNING)" || true
     $KMAKE olddefconfig
     echo "$CFG_STAMP" > "$KDIR/.livelinux-cfg"
 fi
@@ -96,28 +98,22 @@ if [ ! -f "$BBDIR/.livelinux-built" ]; then
         "$BBDIR/.config"
     echo 'CONFIG_EXTRA_CFLAGS="-m32 -O2"' >> "$BBDIR/.config"
     sed -i '/^CONFIG_EXTRA_CFLAGS=""$/d' "$BBDIR/.config"
-    yes "" | $BBMAKE oldconfig >/dev/null
+    # accept defaults for new symbols; `yes` dies of SIGPIPE, so ignore pipefail here
+    (set +o pipefail; yes "" | $BBMAKE oldconfig >/dev/null)
+    grep -q '^CONFIG_STATIC=y' "$BBDIR/.config" || { echo "busybox CONFIG_STATIC lost" >&2; exit 1; }
     $BBMAKE busybox
     touch "$BBDIR/.livelinux-built"
 fi
-file "$BBDIR/busybox" | grep -q 'Intel 80386.*statically linked' || { echo "busybox is not a static i386 binary" >&2; exit 1; }
+file "$BBDIR/busybox" | grep -q 'ELF 32-bit.*statically linked' || { echo "busybox is not a static i386 binary" >&2; exit 1; }
 
 # ============================ initramfs ======================================
 echo "== assembling initramfs"
 ROOT=$CACHE/rootfs
 rm -rf "$ROOT"
 mkdir -p "$ROOT"/{bin,sbin,usr/bin,usr/sbin,proc,sys,dev,tmp,root,etc,demo}
-cp "$BBDIR/busybox" "$ROOT/bin/busybox"
-# applet symlinks without executing the (i386) binary
-(cd "$BBDIR" && while read -r link; do
-    case "$link" in
-        /*) d="$ROOT$(dirname "$link")"; mkdir -p "$d"
-            # relative symlink to busybox
-            rel=$(python3 -c 'import os,sys;print(os.path.relpath("/bin/busybox", sys.argv[1]))' "$(dirname "$link")")
-            ln -sf "$rel" "$ROOT$link" ;;
-    esac
-done < busybox.links)
-# busybox.links lists applets as e.g. /bin/ls; busybox itself is not listed for /bin
+# installs /bin/busybox plus applet symlinks (generated, not by running the i386 binary)
+$BBMAKE CONFIG_PREFIX="$ROOT" install >/dev/null
+[ -x "$ROOT/bin/busybox" ] || { echo "busybox install failed" >&2; exit 1; }
 for src in "$G"/initramfs/demo/*.c; do
     n=$(basename "$src" .c)
     ${CROSS}gcc -m32 -O2 -static -Wall -o "$ROOT/demo/$n" "$src"
@@ -129,17 +125,22 @@ echo "root:x:0:" > "$ROOT/etc/group"
 (cd "$ROOT" && find . -print0 | sort -z | cpio --null -o -H newc --owner 0:0 --quiet | gzip -9n) > "$OUT/initramfs.cpio.gz"
 
 # ============================ kernel outputs =================================
+chmod 644 "$OUT"/* 2>/dev/null || true
 cp "$KDIR/arch/x86/boot/bzImage" "$OUT/bzImage"
 cp "$KDIR/System.map" "$OUT/System.map"
 
 echo "== generating BTF"
 rm -f "$OUT/vmlinux.btf"
 (cd "$KDIR" && pahole --btf_encode_detached="$OUT/vmlinux.btf" --btf_features=default,global_var vmlinux)
+# pahole cannot encode swapper_pg_dir (asm), linux_banner (decl-only DWARF) or the
+# jiffies alias: append VARs for them.
+python3 "$G/btf-inject.py" "$OUT/vmlinux.btf" "$KDIR/vmlinux"
 python3 "$G/check-btf.py" "$OUT/vmlinux.btf"
 
 echo "== generating offsets.json and manifest.json"
 python3 "$G/make-offsets.py" "$KDIR/vmlinux" "$OUT/System.map" "$OUT/offsets.json"
 python3 "$G/make-manifest.py" "$KDIR/.config" "$KERNEL_VERSION" "$OUT"
+chmod 644 "$OUT"/*
 
 echo "== outputs"
 ls -l "$OUT"

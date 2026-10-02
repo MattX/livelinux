@@ -1,4 +1,4 @@
-import { useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import type { Btf, BtfMember, BtfType, Program, Value } from "../../debug/api";
 import { BtfKind } from "../../debug/api";
 import type { InspectorProps } from "../../app/types";
@@ -200,6 +200,16 @@ function resolveRoot(prog: Program, input: string): { name: string; value: Value
     }
     return { name: `(${type} *) ${fmtHex(addr)}`, value: prog.value(addr, type) };
   }
+  // "name" or "name.member.path" / "name->member" (member path resolved on the global).
+  const m = /^([A-Za-z_]\w*)\s*((?:\.|->).+)?$/.exec(input);
+  if (m && m[2]) {
+    let v = prog.var(m[1]);
+    for (const step of m[2].split(/->|\./).filter(Boolean)) {
+      const t = prog.btf.resolve(v.type);
+      v = (t.kind === BtfKind.PTR ? v.deref() : v).member(step);
+    }
+    return { name: input, value: v };
+  }
   return { name: input, value: prog.var(input) };
 }
 
@@ -217,6 +227,8 @@ export function TypesTab({ prog }: InspectorProps) {
       setError(errMsg(e));
     }
   };
+
+  useEffect(() => go(), []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div class="tab-types">
