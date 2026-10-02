@@ -1,0 +1,7 @@
+node_modules/
+dist/
+guest/out/
+guest/cache/
+web/public/guest/*
+!web/public/guest/.gitkeep
+*.log
