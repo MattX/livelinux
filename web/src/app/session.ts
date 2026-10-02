@@ -5,6 +5,7 @@ import { parseBtf } from "../debug/btf";
 import { parseSystemMap } from "../debug/symbols";
 import { KernelProgram } from "../debug/program";
 import { Machine } from "../vm/machine";
+import { LiveSampler } from "../live/sampler";
 import type { GuestAssets } from "./loader";
 
 const PAGE_OFFSET = 0xc0000000;
@@ -46,4 +47,12 @@ export function kernelAddressSpace(machine: Machine, prog: Program) {
   const swapper = prog.symbols.addr("swapper_pg_dir");
   if (swapper === undefined) throw new Error("System.map has no swapper_pg_dir");
   return machine.kernelSpace((swapper - PAGE_OFFSET) >>> 0);
+}
+
+/** Live sampler with its own long-lived Program (address-space caches are cleared per snapshot). */
+export function makeLiveSampler(machine: Machine, info: DebugInfo): LiveSampler {
+  const swapper = info.symbols.addr("swapper_pg_dir");
+  if (swapper === undefined) throw new Error("System.map has no swapper_pg_dir");
+  const space = machine.kernelSpace((swapper - PAGE_OFFSET) >>> 0);
+  return new LiveSampler(machine, new KernelProgram(info.btf, info.symbols, space), space);
 }

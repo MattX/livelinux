@@ -45,13 +45,19 @@ type WalkResult = Translation | { fault: "pde" | "pte" };
 
 export class AddressSpace implements Memory {
   readonly cr3: number;
-  readonly pse: boolean;
+  private readonly psePred: () => boolean;
   private pd: Uint32Array | null | undefined; // undefined = not loaded, null = unreadable
   private pts = new Map<number, Uint32Array | null>(); // keyed by page frame number of the PT
 
-  constructor(private readonly phys: PhysMem, cr3: number, opts?: { pse?: boolean }) {
+  /** `pse` may be a function, re-evaluated on every walk (CR4.PSE can change after construction). */
+  constructor(private readonly phys: PhysMem, cr3: number, opts?: { pse?: boolean | (() => boolean) }) {
     this.cr3 = (cr3 & 0xfffff000) >>> 0;
-    this.pse = opts?.pse ?? true;
+    const pse = opts?.pse ?? true;
+    this.psePred = typeof pse === "function" ? pse : () => pse;
+  }
+
+  get pse(): boolean {
+    return this.psePred();
   }
 
   clearCache(): void {

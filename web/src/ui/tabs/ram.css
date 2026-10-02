@@ -1,0 +1,31 @@
+.ram-controls { display: inline-flex; gap: 4px; }
+.ram-controls .chip.active, .cpu-windows .chip.active { border-color: var(--accent); color: var(--accent); }
+
+.ram-wrap { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start; }
+.ram-canvas {
+  width: min(100%, 512px);
+  aspect-ratio: 1 / 1;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: crosshair;
+  flex: 0 1 512px;
+}
+.ram-side { flex: 1 1 180px; min-width: 180px; display: flex; flex-direction: column; gap: 8px; }
+.ram-usage { font-size: 12px; }
+.ram-bar { display: flex; height: 10px; border-radius: 3px; overflow: hidden; border: 1px solid var(--border); }
+.ram-bar span { min-width: 1px; }
+.ram-legend { list-style: none; margin: 0; padding: 0; font-size: 12px; }
+.ram-legend li { display: flex; align-items: center; gap: 6px; padding: 1px 4px; border-radius: 4px; cursor: pointer; }
+.ram-legend li:hover { background: var(--panel-2); }
+.ram-legend li.active { background: var(--panel-2); outline: 1px solid var(--accent); }
+.ram-legend li.faded { opacity: 0.45; }
+.ram-legend .sw, .sw-inline { display: inline-block; width: 10px; height: 10px; border-radius: 2px; flex: none; vertical-align: -1px; }
+.ram-legend .nm { flex: 1; }
+.ram-legend .sz { color: var(--muted); }
+.ram-proc { font-size: 12px; }
+.ram-proc select { max-width: 100%; }
+.ram-status { margin-top: 6px; font-size: 11px; }
+.ram-status select { padding: 0 4px; font-size: 11px; }
+.ram-owners { list-style: none; margin: 0; padding: 0; }

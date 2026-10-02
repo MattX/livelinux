@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import type { Program } from "../debug/api";
 import type { Machine } from "../vm/machine";
 import { loadAssets, type AssetProgress, type GuestAssets } from "../app/loader";
-import { bootMachine, makeProgram, parseDebugInfo, type DebugInfo } from "../app/session";
+import { bootMachine, makeLiveSampler, makeProgram, parseDebugInfo, type DebugInfo } from "../app/session";
+import type { LiveSampler } from "../live/sampler";
 import { Console } from "./Console";
 import { Inspector } from "./Inspector";
 import { fmtCount, errMsg } from "./util";
@@ -56,6 +57,8 @@ function Loading({ phase }: { phase: Phase }) {
 export function App() {
   const [phase, setPhase] = useState<Phase>({ kind: "loading", progress: [] });
   const [machine, setMachine] = useState<Machine | null>(null);
+  const [live, setLive] = useState<LiveSampler | null>(null);
+  const [liveError, setLiveError] = useState<string | null>(null);
   const [running, setRunning] = useState(true);
   const [prog, setProg] = useState<Program | null>(null);
   const [progError, setProgError] = useState<string | null>(null);
@@ -84,6 +87,15 @@ export function App() {
         const m = await bootMachine(assets);
         if (cancelled) return;
         (window as any).__machine = m; // handy for debugging in devtools
+        try {
+          const l = makeLiveSampler(m, info);
+          l.subscribeCpu(); // always on (a few reads per slice) so the CPU tab has history when opened
+          (window as any).__live = l;
+          setLive(l);
+        } catch (e) {
+          console.error(e);
+          setLiveError(errMsg(e));
+        }
         setMachine(m);
         setRunning(m.running);
         setPhase({ kind: "ready" });
@@ -145,7 +157,7 @@ export function App() {
     const id = setInterval(() => {
       const now = performance.now();
       const cur = machine.getInstructionCounter();
-      setIps(((cur - last) / (now - lastT)) * 1000);
+      setIps(((cur - last + 0x1_0000_0000) % 0x1_0000_0000 / (now - lastT)) * 1000); // u32 counter wraps
       setInstrs(cur);
       last = cur;
       lastT = now;
@@ -237,7 +249,15 @@ export function App() {
           </div>
           <div class="pane">
             <div class="pane-title">Inspector</div>
-            <Inspector machine={machine} running={running} prog={prog} progError={progError} generation={generation} />
+            <Inspector
+              machine={machine}
+              running={running}
+              prog={prog}
+              progError={progError}
+              generation={generation}
+              live={live}
+              liveError={liveError}
+            />
           </div>
         </main>
       ) : (
