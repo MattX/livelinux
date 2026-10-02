@@ -59,6 +59,8 @@ export interface Btf {
   /** Human-readable C-ish name, e.g. "struct task_struct *", "char [16]". */
   typeName(id: TypeId): string;
   readonly pointerSize: number; // 4 on i386
+  /** Append a synthesized type (e.g. a PTR to a struct that has no pointer type in BTF); returns its new id (> all existing ids). */
+  addType?(t: Omit<BtfType, "id">): TypeId;
 }
 
 export interface Sym { name: string; addr: number; type: string /* System.map type letter */; }
@@ -104,6 +106,9 @@ export interface Value {
   readonly addr: number;
   /** Declared type (may be typedef/qualified). */
   readonly type: TypeId;
+  /** Bitfield members only: bit offset (0..7) of the field within the byte at `addr`, and its width in bits. Undefined/0 otherwise. */
+  readonly bitOffset?: number;
+  readonly bitSize?: number;
   /** Dotted member path, descending into anonymous struct/union members automatically. "se.vruntime". */
   member(path: string): Value;
   /** For pointers: value of pointee type at the pointer's target. Throws on void* / null. */
