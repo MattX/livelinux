@@ -1,7 +1,8 @@
 import type { InspectorProps } from "../../app/types";
 import { currentTask, taskInfo } from "../../debug/helpers";
 import { Async, ErrorBox, KV, Section } from "../common";
-import { attempt, useCompute } from "../hooks";
+import { useContext } from "preact/hooks";
+import { attempt, InspectContext, useCompute } from "../hooks";
 import { fmtHex } from "../util";
 
 const FLAGS: [number, string][] = [
@@ -15,6 +16,7 @@ function eflagsStr(v: number): string {
 }
 
 export function OverviewTab({ prog, machine }: InspectorProps) {
+  const { running } = useContext(InspectContext);
   const c = useCompute(() => {
     const regs = machine.regs();
     const banner = attempt(() => prog.var("linux_banner").cstr(256).trim());
@@ -47,7 +49,10 @@ export function OverviewTab({ prog, machine }: InspectorProps) {
         const user = regs.cpl === 3;
         return (
           <>
-            <Section title="Execution state">
+            <Section
+              title="Execution state"
+              right={running && <span class="muted" title="Kernel data is only read where it cannot be mid-update; see the CPU tab for where time is spent">sampled when idle or in user mode</span>}
+            >
               <KV
                 rows={[
                   ["eip", <><b>{fmtHex(regs.eip)}</b> <span class={user ? "user" : "kernel"}>{user ? "(user mode)" : prog.symbols.format(regs.eip)}</span></>],

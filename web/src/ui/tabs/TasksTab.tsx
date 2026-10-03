@@ -134,8 +134,8 @@ function TaskDetail({ prog, machine, addr, onBack }: InspectorProps & { addr: nu
 }
 
 function UserSpace({ prog, machine, d, showMaps, setShowMaps }: InspectorProps & { d: Detail; showMaps: boolean; setShowMaps: (b: boolean) => void }) {
-  const space = useCompute(() => machine.addressSpace(d.pgdPhys), [machine, d.pgdPhys]);
-  const ranges = useCompute(() => machine.addressSpace(d.pgdPhys).walkRanges(0, 0xc0000000), [machine, d.pgdPhys]);
+  const space = useCompute(() => machine.addressSpace(d.pgdPhys), [machine, prog, d.pgdPhys]);
+  const ranges = useCompute(() => machine.addressSpace(d.pgdPhys).walkRanges(0, 0xc0000000), [machine, prog, d.pgdPhys]);
   const vm = d.vmas;
   return (
     <>

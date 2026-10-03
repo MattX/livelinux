@@ -1,7 +1,8 @@
-import { useState } from "preact/hooks";
+import { useRef, useState } from "preact/hooks";
 import type { Memory } from "../vm/types";
 import type { Symbols } from "../debug/api";
 import { Hex } from "./Hex";
+import { useInspectTick } from "./hooks";
 import { errMsg, fmtHex, parseNum } from "./util";
 
 interface Props {
@@ -22,7 +23,7 @@ const LENGTHS = [64, 128, 256, 512, 1024, 4096];
 export function HexViewer({ mem, label, initial, symbols, allowSymbols, autoRead }: Props) {
   const [text, setText] = useState(initial !== undefined ? fmtHex(initial) : "");
   const [len, setLen] = useState(256);
-  const [result, setResult] = useState<{ addr: number; bytes: Uint8Array } | null>(null);
+  const [result, setResult] = useState<{ addr: number; bytes: Uint8Array; prev?: Uint8Array } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [didAuto, setDidAuto] = useState(false);
 
@@ -47,6 +48,25 @@ export function HexViewer({ mem, label, initial, symbols, allowSymbols, autoRead
       setError(errMsg(e));
     }
   };
+  // Re-read the shown range on every live tick / new pause, highlighting bytes that changed.
+  const memRef = useRef(mem);
+  memRef.current = mem;
+  const resultRef = useRef(result);
+  resultRef.current = result;
+  useInspectTick(() => {
+    const r = resultRef.current;
+    if (!r) return;
+    const m = memRef.current as Memory & { clearCache?: () => void };
+    try {
+      m.clearCache?.(); // virtual address spaces cache page tables
+      const bytes = new Uint8Array(m.read(r.addr, r.bytes.length));
+      if (bytes.some((b, i) => b !== r.bytes[i])) setResult({ addr: r.addr, bytes, prev: r.bytes });
+      else if (r.prev) setResult({ addr: r.addr, bytes }); // the highlight lasts one refresh
+      setError(null);
+    } catch (e) {
+      setError(errMsg(e));
+    }
+  });
   if (autoRead && !didAuto && initial !== undefined) {
     setDidAuto(true);
     queueMicrotask(() => read(fmtHex(initial)));
@@ -76,7 +96,7 @@ export function HexViewer({ mem, label, initial, symbols, allowSymbols, autoRead
           {symbols && label.startsWith("V") && (
             <div class="muted" style={{ marginBottom: "4px" }}>{symbols.format(result.addr)}</div>
           )}
-          <Hex bytes={result.bytes} base={result.addr} />
+          <Hex bytes={result.bytes} base={result.addr} prev={result.prev} />
         </>
       )}
     </div>
