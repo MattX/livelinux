@@ -69,3 +69,7 @@
 .cpu-bar > span { display: block; height: 100%; min-width: 1px; }
 .cpu-val { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .cpu-note { font-size: 11px; margin-top: 6px; }
+.cpu-canvas { cursor: pointer; }
+.cpu-row.clickable { cursor: pointer; border-radius: 4px; }
+.cpu-row.clickable:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.cpu-row.selected { background: color-mix(in srgb, var(--accent) 16%, transparent); }

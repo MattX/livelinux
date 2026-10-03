@@ -15,6 +15,7 @@ import {
   type CpuStats,
 } from "../../live/cpuStats";
 import { ErrorBox, Section } from "../common";
+import { useSelection } from "../selection";
 import "./cpu.css";
 
 interface WindowOpt {
@@ -82,6 +83,9 @@ export function CpuTab({ live, running }: LiveTabProps) {
   const runRef = useRef(running);
   const hoverRef = useRef<number | null>(null);
   const forceRef = useRef(true);
+  const sel = useSelection();
+  const selRef = useRef(sel);
+  selRef.current = sel;
   winRef.current = windowMs;
   runRef.current = running;
 
@@ -91,7 +95,7 @@ export function CpuTab({ live, running }: LiveTabProps) {
   // Timeline: redraw on animation frames, but only when something visible would change.
   useEffect(() => {
     forceRef.current = true;
-  }, [windowMs, running]);
+  }, [windowMs, running, sel.pid]);
 
   useEffect(() => {
     const trace = live.cpu;
@@ -155,6 +159,7 @@ export function CpuTab({ live, running }: LiveTabProps) {
       if (trace.count > 0) {
         const cols = buildColumns(trace, from, to, cssW);
         const colorCache = new Map<number, string>();
+        const selPid = selRef.current.pid;
         const runs = (arr: ArrayLike<number>, y: number, h: number, fill: (v: number) => boolean) => {
           let c = 0;
           while (c < cssW) {
@@ -169,9 +174,12 @@ export function CpuTab({ live, running }: LiveTabProps) {
         runs(cols.task, 0, LANE_TASK, (v) => {
           if (v === COL_NONE) return false;
           if (v === COL_IDLE) {
+            ctx.globalAlpha = selPid === null ? 1 : 0.5;
             ctx.fillStyle = th.idle;
             return true;
           }
+          // With a process selected, everything else fades so its slices stand out.
+          ctx.globalAlpha = selPid === null || trace.tasks.get(v)?.pid === selPid ? 1 : 0.18;
           let col = colorCache.get(v);
           if (!col) {
             col = taskColor(trace.tasks.get(v)?.pid ?? -1);
@@ -276,6 +284,17 @@ export function CpuTab({ live, running }: LiveTabProps) {
       forceRef.current = true;
       if (!runRef.current) draw();
     };
+    // Click a slice to select its task everywhere.
+    const onClick = (e: MouseEvent) => {
+      if (!canvas) return;
+      const cssW = canvas.clientWidth;
+      const to = runRef.current ? performance.now() : latestTime(trace);
+      const t = to - winRef.current + ((e.clientX - canvas.getBoundingClientRect().left) / cssW) * winRef.current;
+      const p = findAt(trace, t);
+      if (p.kind !== "slice" || p.halted) return;
+      const l = taskLabel(trace, p.task);
+      if (l.pid >= 0) selRef.current.toggle(l.pid, l.comm);
+    };
     const onLeave = () => {
       hoverRef.current = null;
       forceRef.current = true;
@@ -283,6 +302,7 @@ export function CpuTab({ live, running }: LiveTabProps) {
     };
     canvas?.addEventListener("mousemove", onMove);
     canvas?.addEventListener("mouseleave", onLeave);
+    canvas?.addEventListener("click", onClick);
     const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => (forceRef.current = true)) : null;
     if (canvas) ro?.observe(canvas);
 
@@ -290,6 +310,7 @@ export function CpuTab({ live, running }: LiveTabProps) {
       cancelAnimationFrame(raf);
       canvas?.removeEventListener("mousemove", onMove);
       canvas?.removeEventListener("mouseleave", onLeave);
+      canvas?.removeEventListener("click", onClick);
       ro?.disconnect();
     };
   }, [live]);
@@ -336,7 +357,7 @@ export function CpuTab({ live, running }: LiveTabProps) {
           <div ref={tipRef} class="cpu-tip" />
         </div>
         <div class="cpu-legend muted">
-          top: task on the CPU (colour per pid), blank = emulator overhead; bottom:{" "}
+          top: task on the CPU (colour per pid; click to select), blank = emulator overhead; bottom:{" "}
           <span class="user">user</span> / <span class="kernel">kernel</span> / idle
           {!running && " · paused"}
         </div>
@@ -378,8 +399,10 @@ function Summary({ s, win, windowMs }: { s: CpuStats; win: string; windowMs: num
 }
 
 function TaskShares({ s }: { s: CpuStats }) {
+  const sel = useSelection();
   interface Row {
     key: string;
+    pid: number;
     color: string;
     label: string;
     sub: string;
@@ -388,12 +411,13 @@ function TaskShares({ s }: { s: CpuStats }) {
   }
   const rows: Row[] = s.tasks.map((t) => ({
     key: String(t.addr),
+    pid: t.pid,
     color: taskColor(t.pid),
     label: t.comm,
     sub: t.pid >= 0 ? `pid ${t.pid}` : "",
     share: t.share,
   }));
-  rows.push({ key: "idle", color: "var(--border)", label: "idle", sub: "halted", share: s.idle, muted: true });
+  rows.push({ key: "idle", pid: -1, color: "var(--border)", label: "idle", sub: "halted", share: s.idle, muted: true });
   rows.sort((a, b) => b.share - a.share);
   const max = Math.max(...rows.map((r) => r.share), 0.0001);
   const more = s.taskCount - s.tasks.length;
@@ -401,7 +425,11 @@ function TaskShares({ s }: { s: CpuStats }) {
     <Section title="Task share" right="fraction of wall time on the CPU">
       <div class="cpu-rows">
         {rows.map((r) => (
-          <div class={"cpu-row" + (r.muted ? " muted" : "")} key={r.key}>
+          <div
+            class={"cpu-row" + (r.muted ? " muted" : "") + (r.pid >= 0 ? " clickable" : "") + (r.pid >= 0 && r.pid === sel.pid ? " selected" : "")}
+            key={r.key}
+            onClick={() => r.pid >= 0 && sel.toggle(r.pid, r.label)}
+          >
             <span class="cpu-swatch" style={{ background: r.color }} />
             <span class="cpu-name" title={`${r.label} ${r.sub}`}>
               {r.label} <span class="muted">{r.sub}</span>

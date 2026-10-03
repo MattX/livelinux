@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { runqueue } from "../src/debug/helpers";
+import { eevdf, runqueue, type CfsInfo, type CfsTask } from "../src/debug/helpers";
 import { allocObj, buildKernel, buildRbTree, type Kernel } from "./util/helperFakes";
 
 const T = "struct task_struct";
@@ -86,5 +86,49 @@ describe("runqueue", () => {
     expect(r.cfs.tasks).toHaveLength(1);
     expect(r.cfs.tasks[0]).toMatchObject({ pid: 3, vruntime: 50n, isCurr: true, deadline: undefined, vlag: undefined, slice: undefined });
     expect(r.cfs.avgVruntime).toBeUndefined();
+  });
+});
+
+describe("eevdf", () => {
+  const task = (pid: number, vruntime: bigint, deadline: bigint, o: Partial<CfsTask> = {}): CfsTask => ({
+    addr: 0x1000 * pid, pid, comm: `t${pid}`, vruntime, deadline, vlag: 0n, slice: 3_000_000n, weight: 1024, onRq: true, isCurr: false, ...o,
+  });
+  // avg_vruntime raw sums (v - min) * w over queued entities (curr excluded).
+  const cfs = (tasks: CfsTask[], min = 0n): CfsInfo => {
+    const queued = tasks.filter((t) => !t.isCurr);
+    const raw = queued.reduce((a, t) => a + (t.vruntime - min) * BigInt(t.weight!), 0n);
+    const load = queued.reduce((a, t) => a + BigInt(t.weight!), 0n);
+    const all = tasks.filter((t) => t.onRq);
+    const avg = min + all.reduce((a, t) => a + (t.vruntime - min) * BigInt(t.weight!), 0n) / all.reduce((a, t) => a + BigInt(t.weight!), 0n);
+    return {
+      nrRunning: all.length, minVruntime: min, minVruntimeField: "min_vruntime", avgVruntimeRaw: raw, avgLoad: load,
+      avgVruntime: avg, currAddr: tasks.find((t) => t.isCurr)?.addr ?? 0, tasks,
+    };
+  };
+
+  it("picks the eligible task with the earliest deadline", () => {
+    // V = 2000: t1 (v 1000) and t2 (v 2000) eligible, t3 (v 3000) not, despite the earliest deadline.
+    const s = eevdf(cfs([task(1, 1000n, 9000n), task(2, 2000n, 5000n), task(3, 3000n, 4000n)]));
+    expect(s.avg).toBe(2000n);
+    expect(s.tasks.map((t) => [t.pid, t.lag, t.eligible])).toEqual([[1, 1000n, true], [2, 0n, true], [3, -1000n, false]]);
+    expect(s.pick).toBe(0x2000);
+  });
+
+  it("keeps curr while its slice is protected (vlag == deadline), else compares it like the others", () => {
+    const curr = task(1, 1500n, 8000n, { isCurr: true, vlag: 8000n });
+    const s = eevdf(cfs([curr, task(2, 1000n, 4000n), task(3, 3500n, 5000n)]));
+    expect(s.pick).toBe(0x1000);
+    expect(s.reason).toMatch(/RUN_TO_PARITY/);
+    const s2 = eevdf(cfs([{ ...curr, vlag: 0n }, task(2, 1000n, 4000n), task(3, 3500n, 5000n)]));
+    expect(s2.pick).toBe(0x2000);
+  });
+
+  it("drops an ineligible curr and handles a single runnable task", () => {
+    const s = eevdf(cfs([task(1, 5000n, 6000n, { isCurr: true }), task(2, 1000n, 9000n)]));
+    expect(s.tasks.find((t) => t.pid === 1)!.eligible).toBe(false);
+    expect(s.pick).toBe(0x2000);
+    const one = eevdf(cfs([task(7, 5000n, 6000n, { isCurr: true })]));
+    expect(one.pick).toBe(0x7000);
+    expect(one.reason).toMatch(/only/);
   });
 });

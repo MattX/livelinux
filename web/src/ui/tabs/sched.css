@@ -1,0 +1,49 @@
+/* EEVDF number line. Rows are label | track | tags; the overlay (eligible zone, V line, grid)
+   sits over the track column of every row. Positions are percentages with transitions, so bars
+   glide between live refreshes. */
+.eevdf { --lw: 132px; --rw: 128px; --axis: 18px; margin-bottom: 8px; }
+.eevdf-grid { position: relative; padding-bottom: var(--axis); }
+.eevdf-overlay { position: absolute; top: 0; bottom: var(--axis); left: var(--lw); right: var(--rw); pointer-events: none; }
+.eevdf-elig {
+  position: absolute; top: 0; bottom: 0; left: 0;
+  background: color-mix(in srgb, var(--ok) 9%, transparent);
+  border-right: none;
+  transition: width 0.12s ease-out;
+}
+.eevdf-tick { position: absolute; top: 0; bottom: 0; width: 0; border-left: 1px dotted var(--border); transition: left 0.12s ease-out; }
+.eevdf-v {
+  position: absolute; top: -4px; bottom: 0; width: 0; border-left: 2px solid var(--ok);
+  transition: left 0.12s ease-out;
+}
+.eevdf-axis { position: absolute; left: var(--lw); right: var(--rw); bottom: 0; height: var(--axis); font-size: 10px; color: var(--muted); }
+.eevdf-axis span { position: absolute; top: 3px; transform: translateX(-50%); white-space: nowrap; transition: left 0.12s ease-out; }
+.eevdf-axis span.zero { color: var(--ok); font-weight: 700; }
+
+.eevdf-row { position: relative; display: flex; align-items: center; height: 24px; cursor: pointer; border-radius: 4px; }
+.eevdf-row:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.eevdf-row.selected { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.eevdf-row.dim { opacity: 0.45; }
+.eevdf-label { width: var(--lw); flex: none; display: flex; align-items: center; gap: 6px; overflow: hidden; white-space: nowrap; padding-right: 6px; font-size: 12px; }
+.eevdf-comm { overflow: hidden; text-overflow: ellipsis; }
+.eevdf-sw { width: 9px; height: 9px; border-radius: 2px; flex: none; }
+.eevdf-track { position: relative; flex: 1; height: 100%; }
+.eevdf-bar {
+  position: absolute; top: 6px; height: 12px; border-radius: 3px; opacity: 0.9;
+  transition: left 0.12s ease-out, width 0.12s ease-out, opacity 0.2s;
+}
+.eevdf-row.inelig .eevdf-bar { opacity: 0.45; box-shadow: 0 0 0 1px var(--muted) inset; }
+.eevdf-row.delayed .eevdf-bar { opacity: 0.3; background-image: repeating-linear-gradient(135deg, transparent 0 3px, var(--panel) 3px 5px); }
+.eevdf-row.pick .eevdf-bar { outline: 2px solid var(--accent); outline-offset: 1px; opacity: 1; }
+.eevdf-row.curr .eevdf-bar { box-shadow: 0 0 0 1px var(--text) inset; }
+/* the vruntime end of the bar */
+.eevdf-vr {
+  position: absolute; top: 3px; height: 18px; width: 0; border-left: 2px solid var(--text);
+  transition: left 0.12s ease-out;
+}
+.eevdf-tags { width: var(--rw); flex: none; display: flex; justify-content: flex-end; align-items: center; gap: 4px; font-size: 11px; white-space: nowrap; }
+.eevdf-lag { min-width: 58px; text-align: right; }
+.eevdf-lag.pos { color: var(--ok); }
+.eevdf-lag.neg { color: var(--muted); }
+.tag.pick { color: var(--accent); border-color: var(--accent); font-weight: 700; }
+.eevdf-help { font-size: 12px; line-height: 1.5; margin-top: 6px; }
+.eevdf-elig-chip { background: color-mix(in srgb, var(--ok) 18%, transparent); border-radius: 3px; padding: 0 3px; }

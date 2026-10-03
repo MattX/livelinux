@@ -148,3 +148,67 @@ export function runqueue(prog: Program, opts: WalkOpts = {}): RunqueueInfo {
     cfs,
   };
 }
+
+export interface EevdfTask extends CfsTask {
+  /** Lag in virtual time: avg_vruntime - vruntime (positive = owed CPU time). */
+  lag: bigint;
+  /** entity_eligible(): the kernel's exact weighted test, lag >= 0 up to rounding. */
+  eligible: boolean;
+}
+
+export interface EevdfState {
+  /** avg_vruntime(cfs_rq), the zero-lag point V. Falls back to min_vruntime if unavailable. */
+  avg: bigint;
+  tasks: EevdfTask[];
+  /** task_struct address pick_eevdf() would return now (0 if none). */
+  pick: number;
+  /** Why that task: shown to the user. */
+  reason: string;
+}
+
+/**
+ * Lag, eligibility and the next pick, following pick_eevdf() in kernel/sched/fair.c (6.12): the
+ * eligible entity with the earliest virtual deadline, except that curr keeps the CPU while its
+ * slice is protected (RUN_TO_PARITY, on by default: set_next_entity() stores deadline in vlag).
+ */
+export function eevdf(cfs: CfsInfo): EevdfState {
+  const min = cfs.minVruntime;
+  const curr = cfs.tasks.find((t) => t.isCurr);
+  // vruntime_eligible(): avg >= (v - min) * load, with curr's contribution added when on_rq.
+  let avgRaw = cfs.avgVruntimeRaw;
+  let load = cfs.avgLoad;
+  if (avgRaw !== undefined && load !== undefined && curr?.onRq && curr.weight !== undefined) {
+    const w = BigInt(curr.weight);
+    avgRaw += BigInt.asIntN(64, curr.vruntime - min) * w;
+    load += w;
+  }
+  const avg = cfs.avgVruntime ?? min;
+  const eligible = (v: bigint): boolean => {
+    if (avgRaw === undefined || load === undefined || load === 0n) return BigInt.asIntN(64, v - avg) <= 0n;
+    return avgRaw >= BigInt.asIntN(64, v - min) * load;
+  };
+  const tasks: EevdfTask[] = cfs.tasks.map((t) => ({
+    ...t,
+    lag: BigInt.asIntN(64, avg - t.vruntime),
+    eligible: t.onRq && eligible(t.vruntime),
+  }));
+  const before = (a: EevdfTask, b: EevdfTask) => BigInt.asIntN(64, (a.deadline ?? a.vruntime) - (b.deadline ?? b.vruntime)) < 0n;
+  const queued = tasks.filter((t) => !t.isCurr && t.onRq);
+  const cur = tasks.find((t) => t.isCurr);
+
+  const done = (t: EevdfTask | undefined, reason: string): EevdfState => ({ avg, tasks, pick: t?.addr ?? 0, reason });
+  if (cfs.nrRunning === 1) {
+    return cur?.onRq ? done(cur, "only runnable task") : done(queued[0], "only runnable task");
+  }
+  const c = cur && cur.onRq && cur.eligible ? cur : undefined;
+  if (c && c.vlag !== undefined && c.deadline !== undefined && BigInt.asUintN(64, c.vlag) === c.deadline) {
+    return done(c, "running task keeps the CPU until its slice ends (RUN_TO_PARITY)");
+  }
+  let best: EevdfTask | undefined;
+  for (const t of queued) if (t.eligible && (!best || before(t, best))) best = t;
+  if (!best || (c && before(c, best))) best = c;
+  if (!best) return done(undefined, "no eligible task");
+  return done(best, best.schedDelayed
+    ? "earliest eligible deadline, but delayed-dequeue: it will be dequeued instead of run"
+    : "eligible (lag ≥ 0) with the earliest virtual deadline");
+}

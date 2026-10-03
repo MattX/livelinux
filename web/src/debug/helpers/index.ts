@@ -5,3 +5,5 @@ export * from "./maple";
 export * from "./tasks";
 export * from "./sched";
 export * from "./mm";
+export * from "./files";
+export * from "./pagemap";

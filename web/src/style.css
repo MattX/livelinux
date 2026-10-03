@@ -231,3 +231,12 @@ td.num, th.num { text-align: right; }
 pre.banner { margin: 0; white-space: pre-wrap; word-break: break-word; color: var(--muted); }
 pre.maps { margin: 0; padding: 8px 10px; background: var(--panel-2); border-radius: 6px; overflow-x: auto; font-size: 12px; }
 .tbl-wrap.scroll { max-height: 340px; overflow: auto; }
+
+/* selection shared by every tab */
+.sel-chip {
+  display: inline-flex; align-items: center; gap: 6px; margin: 0 6px 4px 0;
+  padding: 1px 4px 1px 8px; border: 1px solid var(--accent); border-radius: 999px; font-size: 12px;
+}
+.sel-chip button { padding: 0 6px; border: none; background: transparent; color: var(--muted); }
+.sel-dot { width: 8px; height: 8px; border-radius: 50%; }
+tr.selected, tbody tr.selected:nth-child(even) { background: color-mix(in srgb, var(--accent) 18%, transparent); }
