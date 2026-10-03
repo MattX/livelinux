@@ -1,4 +1,4 @@
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useMemo, useState } from "preact/hooks";
 import type { ComponentType } from "preact";
 import type { Program } from "../debug/api";
 import type { Machine } from "../vm/machine";
@@ -11,8 +11,11 @@ import { MemoryTab } from "./tabs/MemoryTab";
 import { TypesTab } from "./tabs/TypesTab";
 import { RamTab } from "./tabs/RamTab";
 import { CpuTab } from "./tabs/CpuTab";
+import { FilesTab } from "./tabs/FilesTab";
+import { taskColor } from "../live/cpuStats";
 import { ErrorBox } from "./common";
 import { InspectContext } from "./hooks";
+import { SelectionContext, type SelectionApi } from "./selection";
 
 // `live: true` tabs drive the sampler themselves (continuous RAM / CPU sampling). The others read
 // kernel state through a Program: per pause, or on the sampler's periodic ticks while running.
@@ -34,6 +37,7 @@ const TABS: Tab[] = [
   { id: "overview", label: "Overview", live: false, C: OverviewTab },
   { id: "tasks", label: "Tasks", live: false, C: TasksTab },
   { id: "sched", label: "Scheduler", live: false, C: SchedulerTab },
+  { id: "files", label: "Files", live: false, C: FilesTab },
   { id: "memory", label: "Memory", live: false, C: MemoryTab },
   { id: "types", label: "Types", live: false, C: TypesTab },
 ];
@@ -53,47 +57,71 @@ interface Props {
 
 export function Inspector({ machine, running, prog, progError, generation, live, liveError }: Props) {
   const [tab, setTab] = useState<string>("ram");
+  const [selPid, setSelPid] = useState<number | null>(null);
+  const [selComm, setSelComm] = useState<string | null>(null);
   const active = TABS.find((t) => t.id === tab)!;
+  const selection = useMemo<SelectionApi>(() => {
+    const select = (pid: number | null, comm?: string) => {
+      setSelPid(pid);
+      setSelComm(pid === null ? null : (comm ?? null));
+    };
+    return {
+      pid: selPid,
+      comm: selComm,
+      select,
+      toggle: (pid, comm) => select(pid === selPid ? null : pid, comm),
+      goto: (id) => TABS.some((t) => t.id === id) && setTab(id),
+    };
+  }, [selPid, selComm]);
   // While running, inspector tabs read through the sampler's long-lived Program (its page-table
   // cache is cleared on every tick); while paused, through the Program built for this pause.
   const tabProg = running ? (live?.prog ?? null) : prog;
   return (
     <InspectContext.Provider value={{ live, running, generation }}>
-      <div class="inspector">
-        <div class="tabs" role="tablist">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              role="tab"
-              aria-selected={tab === t.id}
-              class={"tab" + (tab === t.id ? " active" : "")}
-              onClick={() => setTab(t.id)}
-              data-tab={t.id}
-            >
-              {t.label}
-            </button>
-          ))}
-          <span class="spacer" />
-          {running && !active.live && live && <RefreshControl live={live} />}
-        </div>
-        <div class="tab-body" data-testid="tab-body">
-          {active.live ? (
-            live ? (
-              <active.C key={active.id} live={live} machine={machine} running={running} />
+      <SelectionContext.Provider value={selection}>
+        <div class="inspector">
+          <div class="tabs" role="tablist">
+            {TABS.map((t) => (
+              <button
+                key={t.id}
+                role="tab"
+                aria-selected={tab === t.id}
+                class={"tab" + (tab === t.id ? " active" : "")}
+                onClick={() => setTab(t.id)}
+                data-tab={t.id}
+              >
+                {t.label}
+              </button>
+            ))}
+            <span class="spacer" />
+            {selPid !== null && (
+              <span class="sel-chip" data-testid="selection" title="Selected process: highlighted in every tab">
+                <span class="sel-dot" style={{ background: taskColor(selPid) }} />
+                {selComm ?? "pid"} <b>{selPid}</b>
+                <button type="button" onClick={() => selection.select(null)} title="Clear selection">×</button>
+              </span>
+            )}
+            {running && !active.live && live && <RefreshControl live={live} />}
+          </div>
+          <div class="tab-body" data-testid="tab-body">
+            {active.live ? (
+              live ? (
+                <active.C key={active.id} live={live} machine={machine} running={running} />
+              ) : (
+                <ErrorBox error={`Live sampler unavailable: ${liveError ?? "VM not ready"}`} />
+              )
+            ) : running && !live ? (
+              <div class="muted">Live sampler unavailable ({liveError ?? "VM not ready"}); pause the VM to inspect.</div>
             ) : (
-              <ErrorBox error={`Live sampler unavailable: ${liveError ?? "VM not ready"}`} />
-            )
-          ) : running && !live ? (
-            <div class="muted">Live sampler unavailable ({liveError ?? "VM not ready"}); pause the VM to inspect.</div>
-          ) : (
-            <>
-              {!running && progError && <ErrorBox error={`Could not build kernel program: ${progError}`} />}
-              {/* Keyed by tab only: state such as the selected task survives pause / resume. */}
-              {tabProg && <active.C key={active.id} prog={tabProg} machine={machine} />}
-            </>
-          )}
+              <>
+                {!running && progError && <ErrorBox error={`Could not build kernel program: ${progError}`} />}
+                {/* Keyed by tab only: state such as the selected task survives pause / resume. */}
+                {tabProg && <active.C key={active.id} prog={tabProg} machine={machine} />}
+              </>
+            )}
+          </div>
         </div>
-      </div>
+      </SelectionContext.Provider>
     </InspectContext.Provider>
   );
 }

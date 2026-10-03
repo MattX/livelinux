@@ -4,6 +4,7 @@ import { buildLayout, type Layout, type LayoutMode } from "../../live/layout";
 import { describePage, type PageDetails } from "../../live/pageinfo";
 import { KIND_INFO, PageKind, type PhysSnapshot } from "../../live/physmap";
 import { KV, Section } from "../common";
+import { useSelection } from "../selection";
 import { fmtHex, fmtSize } from "../util";
 import "./ram.css";
 
@@ -59,7 +60,8 @@ export function RamTab({ live, running }: LiveTabProps) {
   const [mode, setMode] = useState<LayoutMode>("hilbert");
   const [interval, setIntervalMs] = useState(live.ramIntervalMs);
   const [focusKind, setFocusKind] = useState<PageKind | null>(null);
-  const [focusPid, setFocusPid] = useState<number | null>(null);
+  const sel = useSelection();
+  const focusPid = sel.pid;
   const [hoverPfn, setHoverPfn] = useState<number | null>(null);
   const [pinnedPfn, setPinnedPfn] = useState<number | null>(null);
   const [snap, setSnap] = useState<PhysSnapshot | null>(live.ram);
@@ -293,10 +295,14 @@ export function RamTab({ live, running }: LiveTabProps) {
                 value={focusPid ?? ""}
                 onChange={(e) => {
                   const v = (e.target as HTMLSelectElement).value;
-                  setFocusPid(v === "" ? null : Number(v));
+                  const pid = v === "" ? null : Number(v);
+                  sel.select(pid, pid === null ? undefined : snap.tasks.get(pid));
                 }}
               >
                 <option value="">all</option>
+                {focusPid !== null && !procs.some((p) => p.pid === focusPid) && (
+                  <option value={focusPid}>{snap.tasks.get(focusPid) ?? sel.comm ?? "?"} ({focusPid}) · no user pages</option>
+                )}
                 {procs.map((p) => (
                   <option value={p.pid}>
                     {p.comm} ({p.pid}) · {fmtSize(p.n * 4096)}

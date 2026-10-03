@@ -2,9 +2,12 @@ import { useState } from "preact/hooks";
 import type { Program, Value } from "../../debug/api";
 import type { InspectorProps } from "../../app/types";
 import {
-  currentTask, forEachTask, forEachThread, formatMaps, mmPgdPhys, taskInfo, vmas,
-  type TaskInfo, type VmaInfo,
+  currentTask, findTask, forEachTask, forEachThread, formatMaps, mmPgdPhys, taskInfo, vmaPages, vmas,
+  type TaskInfo, type VmaInfo, type VmaPages,
 } from "../../debug/helpers";
+import { taskColor } from "../../live/cpuStats";
+import { AddressSpaceView } from "../AddressSpaceView";
+import { useSelection } from "../selection";
 import { Async, ErrorBox, KV, Section } from "../common";
 import { attempt, useCompute } from "../hooks";
 import { HexViewer } from "../HexViewer";
@@ -12,12 +15,18 @@ import { RangesTable } from "../RangesTable";
 import { fmtHex } from "../util";
 
 export function TasksTab(props: InspectorProps) {
-  const [sel, setSel] = useState<number | null>(null);
-  if (sel !== null) return <TaskDetail {...props} addr={sel} onBack={() => setSel(null)} />;
-  return <TaskList {...props} onSelect={setSel} />;
+  const sel = useSelection();
+  // Arriving with a process selected elsewhere (CPU, RAM, ...) opens its details directly.
+  const [open, setOpen] = useState(sel.pid !== null);
+  if (open && sel.pid !== null) return <TaskDetail {...props} pid={sel.pid} onBack={() => setOpen(false)} />;
+  return <TaskList {...props} onOpen={(t) => {
+    sel.select(t.pid, t.comm);
+    setOpen(true);
+  }} />;
 }
 
-function TaskList({ prog, onSelect }: InspectorProps & { onSelect: (addr: number) => void }) {
+function TaskList({ prog, onOpen }: InspectorProps & { onOpen: (t: TaskInfo) => void }) {
+  const sel = useSelection();
   const c = useCompute(() => {
     const cur = attempt(() => currentTask(prog).addr);
     const rows: TaskInfo[] = [];
@@ -37,8 +46,8 @@ function TaskList({ prog, onSelect }: InspectorProps & { onSelect: (addr: number
               </thead>
               <tbody>
                 {rows.map((t) => (
-                  <tr key={t.addr} class={"clickable" + (t.addr === cur ? " current" : "")} onClick={() => onSelect(t.addr)}>
-                    <td class="num">{t.pid}</td>
+                  <tr key={t.addr} class={"clickable" + (t.addr === cur ? " current" : "") + (t.pid === sel.pid ? " selected" : "")} onClick={() => onOpen(t)}>
+                    <td class="num"><span class="sel-dot" style={{ background: taskColor(t.pid), display: "inline-block", marginRight: "6px" }} />{t.pid}</td>
                     <td class="num">{t.ppid}</td>
                     <td title={t.stateName}>{t.state}</td>
                     <td>{t.comm} {t.addr === cur && <span class="tag cur">current</span>}</td>
@@ -63,6 +72,7 @@ interface Detail {
   mmAddr: number;
   pgdPhys: number;
   vmas: { ok: true; value: VmaInfo[] } | { ok: false; error: string };
+  pages: { ok: true; value: VmaPages[] } | { ok: false; error: string };
 }
 
 function loadDetail(prog: Program, task: Value): Detail {
@@ -75,16 +85,25 @@ function loadDetail(prog: Program, task: Value): Detail {
   const mmPtr = task.member("mm").ptr();
   let pgdPhys = 0;
   let vmaRes: Detail["vmas"] = { ok: true, value: [] };
+  let pages: Detail["pages"] = { ok: true, value: [] };
   if (mmPtr !== 0) {
     const mm = task.member("mm").deref();
     pgdPhys = mmPgdPhys(mm);
     vmaRes = attempt(() => vmas(prog, mm));
+    if (vmaRes.ok) {
+      const list = vmaRes.value;
+      pages = attempt(() => vmaPages(prog, pgdPhys, list));
+    }
   }
-  return { info, threads, prio: { prio: info.prio }, hasMm: mmPtr !== 0, mmAddr: mmPtr, pgdPhys, vmas: vmaRes };
+  return { info, threads, prio: { prio: info.prio }, hasMm: mmPtr !== 0, mmAddr: mmPtr, pgdPhys, vmas: vmaRes, pages };
 }
 
-function TaskDetail({ prog, machine, addr, onBack }: InspectorProps & { addr: number; onBack: () => void }) {
-  const c = useCompute(() => loadDetail(prog, prog.value(addr, "struct task_struct")), [prog, addr]);
+function TaskDetail({ prog, machine, pid, onBack }: InspectorProps & { pid: number; onBack: () => void }) {
+  const c = useCompute(() => {
+    const t = findTask(prog, pid);
+    if (!t) throw new Error(`no task with pid ${pid} (it may have exited)`);
+    return loadDetail(prog, t);
+  }, [prog, pid]);
   const [showMaps, setShowMaps] = useState(false);
   return (
     <>
@@ -96,7 +115,7 @@ function TaskDetail({ prog, machine, addr, onBack }: InspectorProps & { addr: nu
           const i = d.info;
           return (
             <>
-              <Section title={`${i.comm} (pid ${i.pid})`}>
+              <Section title={`${i.comm} (pid ${i.pid})`} right={<span class="sel-dot" style={{ background: taskColor(i.pid), display: "inline-block" }} />}>
                 <KV
                   rows={[
                     ["task_struct", fmtHex(i.addr)],
@@ -137,8 +156,12 @@ function UserSpace({ prog, machine, d, showMaps, setShowMaps }: InspectorProps &
   const space = useCompute(() => machine.addressSpace(d.pgdPhys), [machine, prog, d.pgdPhys]);
   const ranges = useCompute(() => machine.addressSpace(d.pgdPhys).walkRanges(0, 0xc0000000), [machine, prog, d.pgdPhys]);
   const vm = d.vmas;
+  const [showPt, setShowPt] = useState(false);
   return (
     <>
+      <Section title="Address space, page by page" right="0 – 3 GiB; one cell per 4 KiB page">
+        {d.pages.ok ? <AddressSpaceView prog={prog} pages={d.pages.value} /> : <ErrorBox error={d.pages.error} />}
+      </Section>
       <Section
         title={`VMAs${vm.ok ? ` (${vm.value.length})` : ""}`}
         right={vm.ok && <a style={{ cursor: "pointer", color: "var(--accent)" }} onClick={() => setShowMaps(!showMaps)}>{showMaps ? "table" : "/proc/pid/maps"}</a>}
@@ -166,8 +189,11 @@ function UserSpace({ prog, machine, d, showMaps, setShowMaps }: InspectorProps &
           </div>
         )}
       </Section>
-      <Section title="Page tables (user half, 0 .. 0xc0000000)">
-        <Async c={ranges}>{(r) => <RangesTable ranges={r} />}</Async>
+      <Section
+        title="Page tables (user half, 0 .. 0xc0000000)"
+        right={<a style={{ cursor: "pointer", color: "var(--accent)" }} onClick={() => setShowPt(!showPt)}>{showPt ? "hide" : "show ranges"}</a>}
+      >
+        {showPt && <Async c={ranges}>{(r) => <RangesTable ranges={r} />}</Async>}
       </Section>
       <Section title="Read user memory">
         <Async c={space}>

@@ -2,9 +2,11 @@
 
 Linux running in your browser (v86, i386) with a side-panel kernel inspector: a map of every
 physical page frame and what it is used for, a CPU timeline with a statistical kernel profiler,
-tasks, the CFS runqueue, process VMAs and page tables, kernel memory, and any global variable via a
-generic BTF type explorer. Everything updates live while the guest runs; pause it to freeze one
-exact state. Fully static; no server.
+tasks, the EEVDF scheduler on a virtual-time number line, each process's address space page by page
+(demand paging, shared page cache, copy-on-write after fork), a graph of open files with pipes drawn
+as live ring buffers, kernel memory, and any global variable via a generic BTF type explorer.
+Everything updates live while the guest runs; pause it to freeze one exact state. Clicking a process
+anywhere selects it in every view. Fully static; no server.
 
 ## How it works
 
@@ -23,6 +25,10 @@ exact state. Fully static; no server.
   - RAM: ~10x/s, classify all `struct page`s (buddy/per-CPU free, slab, page tables, anon, page
     cache, kernel stacks, kernel image, reserved) and build a frame -> process reverse map from
     page tables, in ~3-6 ms (`physmap.ts`). Drawn one pixel per page along a Hilbert curve.
+- **Visual inspectors:** `eevdf()` reproduces `pick_eevdf()`'s eligibility test and pick
+  (`helpers/sched.ts`); `vmaPages()` classifies every page of every VMA from its PTE and `struct page`
+  (`helpers/pagemap.ts`); `openFiles()` walks fd tables and pipe rings (`helpers/files.ts`). The
+  process selection is shared through `ui/selection.ts`.
 
 ## Build & run
 

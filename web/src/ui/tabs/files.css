@@ -1,0 +1,65 @@
+/* Files tab: process <-> open file graph. Colors come from the global theme variables. */
+.files-chips .chip.active { border-color: var(--accent); color: var(--accent); }
+
+.files-graph { display: block; width: 100%; height: auto; overflow: visible; font-family: var(--mono); }
+.files-graph text { font-size: 11px; fill: var(--text); pointer-events: none; }
+
+/* processes */
+.pnode { cursor: pointer; transition: opacity 0.15s; }
+.pnode .pbox { fill: var(--panel); stroke: var(--border); stroke-width: 1.2; }
+.pnode:hover .pbox { stroke: var(--accent); }
+.pnode.selected .pbox { stroke: var(--accent); stroke-width: 2.4; fill: color-mix(in srgb, var(--accent) 10%, var(--panel)); }
+.pnode .pname { font-weight: 600; }
+.pnode .ppid { fill: var(--muted); font-size: 10px; }
+.pnode.hl .pbox { stroke: var(--accent); }
+
+/* edges */
+.edge { transition: opacity 0.15s; }
+.edge .e-line { fill: none; stroke: var(--ec); stroke-width: 1.5; stroke-opacity: 0.75; }
+.edge .e-arrow { fill: var(--ec); fill-opacity: 0.85; }
+.files-graph .edge .e-label { font-size: 9.5px; fill: var(--muted); paint-order: stroke; stroke: var(--panel); stroke-width: 3px; stroke-linejoin: round; }
+.edge.hl .e-line { stroke-width: 2.6; stroke-opacity: 1; }
+.edge.hl .e-arrow { fill-opacity: 1; }
+.files-graph .edge.hl .e-label { fill: var(--text); font-weight: 600; }
+.edge.dim, .pnode.dim, .fnode.dim { opacity: 0.14; }
+
+/* files */
+.fnode { transition: opacity 0.15s; --fc: var(--muted); }
+.fnode.t-pipe { --fc: var(--accent); }
+.fnode.t-chr, .fnode.t-blk { --fc: var(--kernel); }
+.fnode.t-reg { --fc: var(--user); }
+.fnode.t-dir { --fc: var(--warn); }
+.fnode.t-sock { --fc: var(--ok); }
+.fnode .fbox { fill: color-mix(in srgb, var(--fc) 7%, var(--panel)); stroke: var(--fc); stroke-width: 1.4; }
+.fnode.hl .fbox { stroke-width: 2.6; }
+.files-graph .fnode .fname { font-weight: 600; }
+.files-graph .fnode .fsub { fill: var(--muted); font-size: 10px; }
+
+/* pipe ring buffer */
+.ring .seg { fill: var(--panel-2); stroke: var(--border); stroke-width: 0.8; transition: fill-opacity 0.25s, fill 0.25s; }
+.ring .seg.full { fill: var(--accent); stroke: var(--accent); }
+.ring .mark { stroke: none; transition: all 0.25s; }
+.ring .mark.head { fill: var(--ok); }
+.ring .mark.tail { fill: var(--err); }
+.files-graph .ring .ring-n { font-size: 9px; fill: var(--muted); }
+.badge { stroke-width: 1; fill: var(--panel); }
+.badge.warn { stroke: var(--warn); fill: color-mix(in srgb, var(--warn) 14%, var(--panel)); }
+.badge.ok { stroke: var(--ok); fill: color-mix(in srgb, var(--ok) 12%, var(--panel)); }
+.files-graph .badge-t { font-size: 9.5px; font-weight: 600; }
+.files-graph .badge-t.warn { fill: var(--warn); }
+.files-graph .badge-t.ok { fill: var(--ok); }
+
+/* fd table */
+.fd-table .fd-path { max-width: 260px; overflow: hidden; text-overflow: ellipsis; font-family: var(--mono); }
+.ftype { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.ftype.t-pipe { color: var(--accent); }
+.ftype.t-chr, .ftype.t-blk { color: var(--kernel); }
+.ftype.t-reg { color: var(--user); }
+.ftype.t-dir { color: var(--warn); }
+.ftype.t-sock { color: var(--ok); }
+
+.files-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 6px; font-size: 11px; }
+.files-legend .lg { display: inline-block; width: 9px; height: 9px; margin-left: 6px; }
+.files-legend .lg-head { background: var(--ok); clip-path: polygon(50% 100%, 0 0, 100% 0); }
+.files-legend .lg-tail { background: var(--err); clip-path: polygon(50% 0, 0 100%, 100% 100%); }
+.files-legend .lg-seg { background: var(--accent); border-radius: 2px; }
