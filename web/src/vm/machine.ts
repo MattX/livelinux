@@ -46,6 +46,8 @@ interface V86Cpu {
   sreg: Uint16Array;
   segment_offsets: Int32Array;
   cpl: Uint8Array;
+  in_hlt?: Uint8Array;
+  main_loop: () => number;
   get_eflags?: () => number;
   get_real_eip?: () => number;
 }
@@ -74,6 +76,8 @@ function toImage(x: Blob_): { url: string } | { buffer: ArrayBuffer } {
 export class Machine {
   private readonly stateListeners = new Set<(s: MachineState) => void>();
   private readonly serialListeners = new Set<(b: number) => void>();
+  private readonly sliceListeners = new Set<(sliceStart: number) => void>();
+  private sliceHooked = false;
 
   readonly phys: PhysMem;
 
@@ -166,6 +170,64 @@ export class Machine {
     return () => this.serialListeners.delete(cb);
   }
 
+  /**
+   * Run `cb` after every emulator slice. v86 executes the guest on the JS thread in short slices
+   * (`main_loop`, ~1 ms of guest time each) and yields in between, so while `cb` runs guest memory
+   * and registers are quiescent: reading them is as consistent as reading them while paused (the
+   * guest may still be in the middle of updating a data structure). Keep callbacks cheap; time spent
+   * here is wall-clock time the guest does not run. Exceptions are caught and logged.
+   * `sliceStart` is the performance.now() timestamp at which the slice began executing.
+   */
+  onSlice(cb: (sliceStart: number) => void): () => void {
+    this.hookSlices();
+    this.sliceListeners.add(cb);
+    return () => this.sliceListeners.delete(cb);
+  }
+
+  private hookSlices(): void {
+    if (this.sliceHooked) return;
+    this.sliceHooked = true;
+    const cpu = this.cpu;
+    const orig = cpu.main_loop;
+    cpu.main_loop = () => {
+      const start = performance.now();
+      const t = orig();
+      for (const cb of this.sliceListeners) {
+        try {
+          cb(start);
+        } catch (e) {
+          console.error("slice listener failed", e);
+        }
+      }
+      return t;
+    };
+  }
+
+  /** True if the CPU is halted (HLT, i.e. the kernel idle loop waiting for an interrupt). */
+  get halted(): boolean {
+    const h = this.cpu.in_hlt;
+    return h ? h[0] !== 0 : false;
+  }
+
+  /** Cheap single-register reads for per-slice sampling (no Regs object). */
+  get eip(): number {
+    const c = this.cpu;
+    return (c.get_real_eip ? c.get_real_eip() : c.instruction_pointer[0] - c.segment_offsets[1]) >>> 0;
+  }
+
+  get cpl(): number {
+    const c = this.cpu;
+    return c.cpl ? c.cpl[0] : c.sreg[1] & 3;
+  }
+
+  get esp(): number {
+    return this.cpu.reg32[4] >>> 0;
+  }
+
+  get cr3(): number {
+    return this.cpu.cr[3] >>> 0;
+  }
+
   serialSend(s: string): void {
     this.emu.serial0_send(s);
   }
@@ -203,8 +265,8 @@ export class Machine {
   }
 
   addressSpace(cr3: number): AddressSpace {
-    const pse = (this.cpu.cr[4] & 0x10) !== 0;
-    return new AddressSpace(this.phys, cr3, { pse });
+    // Read CR4.PSE live: address spaces may outlive the boot (the kernel enables PSE early on).
+    return new AddressSpace(this.phys, cr3, { pse: () => (this.cpu.cr[4] & 0x10) !== 0 });
   }
 
   async snapshot(): Promise<ArrayBuffer> {

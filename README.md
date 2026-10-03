@@ -1,8 +1,10 @@
 # livelinux
 
-Linux running in your browser (v86, i386) with a side-panel kernel inspector: pause the VM and
-look at tasks, the CFS runqueue, process VMAs and page tables, kernel memory, and any global
-variable via a generic BTF type explorer. Fully static; no server.
+Linux running in your browser (v86, i386) with a side-panel kernel inspector. Live views (no
+pausing): a map of every physical page frame and what it is used for, and a CPU timeline with a
+statistical kernel profiler. Pause the VM to look at tasks, the CFS runqueue, process VMAs and page
+tables, kernel memory, and any global variable via a generic BTF type explorer. Fully static; no
+server.
 
 ## How it works
 
@@ -14,6 +16,13 @@ variable via a generic BTF type explorer. Fully static; no server.
   `web/src/debug/program.ts`
 - **Helpers:** list/rbtree/maple-tree walkers, tasks, CFS runqueue, VMAs. `web/src/debug/helpers/`
 - **Page tables:** our own i386 2-level walker over guest physical memory. `web/src/vm/mmu.ts`
+- **Live sampling:** v86 runs the guest on the JS thread in ~1 ms slices; `Machine.onSlice` runs
+  code between slices, when guest memory is quiescent, so nothing needs pausing. `web/src/live/`
+  - CPU: per slice, `current`, user/kernel/halted and EIP into a ring buffer (`cputrace.ts`).
+    Slices ending on an IRQ entry stub are attributed to the interrupted context.
+  - RAM: ~10x/s, classify all `struct page`s (buddy/per-CPU free, slab, page tables, anon, page
+    cache, kernel stacks, kernel image, reserved) and build a frame -> process reverse map from
+    page tables, in ~3-6 ms (`physmap.ts`). Drawn one pixel per page along a Hilbert curve.
 
 ## Build & run
 

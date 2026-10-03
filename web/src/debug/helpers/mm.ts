@@ -47,7 +47,7 @@ function dentryName(d: Value): string {
 }
 
 /** Best-effort full path of a `struct dentry *` by walking d_parent. */
-function dentryPath(prog: Program, dentryPtr: number): { path: string; base: string } {
+export function dentryPath(prog: Program, dentryPtr: number): { path: string; base: string } {
   const parts: string[] = [];
   let cur = dentryPtr;
   for (let i = 0; i < 64 && cur !== 0; i++) {
