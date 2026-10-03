@@ -36,6 +36,20 @@ node scripts/smoke-boot.mjs
 
 CI (`.github/workflows/site.yml`) builds the guest, runs the tests, and deploys to GitHub Pages.
 
-Inside the guest: `/demo/forker N`, `/demo/spin SECS`, `/demo/mapper` create interesting state to inspect.
+## Demo programs
+
+Small static programs in `/demo` (on `PATH`) create interesting state to inspect. Sources are in
+`guest/initramfs/demo/`; each file's header comment describes what it does step by step.
+
+| Command | What it does | Watch it in |
+| --- | --- | --- |
+| `forker [N]` | forks N sleeping children | tasks, scheduler |
+| `spin [SECS]` | busy loop | CPU timeline, scheduler |
+| `mapper` | anon, mprotect-split and file mappings; prints its maps | task VMAs, page tables |
+| `pipepair [MS]` / `pipepair -f` | parent and child ping-pong over two pipes (the child's stdin/stdout); `-f` fills the 64 KiB pipe ring until the writer blocks | fd graph, pipe buffer pages in the RAM map |
+| `slabchurn [N] [SECS] [ROUNDS]` | in rounds: open N new tmpfs files, close every other fd, close the rest, unlink; prints `/proc/slabinfo` for `filp`, `dentry`, `shmem_inode_cache` | slab view |
+| `fragmenter [-d] [MB] [SECS] [ROUNDS]` | in rounds: touch MB of anon memory, munmap every other page (order-0 holes), release the rest (buddies merge); prints `/proc/buddyinfo`. Caps the per-CPU page lists while it runs (`vm.percpu_pagelist_high_fraction`, restored on exit) so frees reach the buddy lists. `-d` punches with `MADV_DONTNEED` instead, keeping one VMA | buddy view, RAM map |
+| `cowtouch [PAGES] [MS]` | fills pages, forks; the child writes them one by one (each write copies a frame), then the parent does (frames reused in place) | address-space overlays, RAM map |
+| `oomer [STEP_MB] [MS]` | three bystanders (one with `oom_score_adj` 1000) and a hog that grows until the OOM killer acts; prints RSS and `oom_score` per child and who got killed | OOM killer, tasks, RAM map |
 
 See `docs/PLAN.md` for the design.
