@@ -2,11 +2,14 @@
 // sampler hooks the end of each slice (Machine.onSlice), when guest memory is quiescent:
 //  - CPU trace: a few register/memory reads every slice (see cputrace.ts).
 //  - Physical memory snapshots: a full struct-page scan every `ramIntervalMs` (see physmap.ts).
+//  - Inspector ticks: every `tickIntervalMs`, callbacks that re-read whatever the inspector tabs
+//    show (tasks, runqueue, a struct, ...) run synchronously inside the slice hook.
 //
 // A slice can end at any instruction, including in the middle of a kernel list or tree update, so
 // snapshots prefer slice boundaries where no kernel data structure can be mid-update on this UP
 // kernel: the CPU is halted in the idle loop, or in user mode. If no such boundary arrives within
-// `maxDeferMs` of the due time, the snapshot is taken anyway and marked `torn`.
+// `maxDeferMs` of the due time, the snapshot is taken anyway and marked `torn`. Inspector ticks
+// follow the same rule.
 
 import type { Program } from "../debug/api";
 import type { Machine } from "../vm/machine";
@@ -23,6 +26,12 @@ export class LiveSampler {
   ramVersion = 0;
   ramError: string | null = null;
   ramIntervalMs = 100;
+  /** Period of inspector ticks; 0 = only on request (a new subscription). */
+  tickIntervalMs = 500;
+  /** Increments on every inspector tick. */
+  tickVersion = 0;
+  /** Whether the latest inspector tick had to be taken at a non-quiet boundary. */
+  tickTorn = false;
   maxDeferMs = 25;
 
   private readonly recorder: CpuRecorder | null;
@@ -34,6 +43,9 @@ export class LiveSampler {
   private nextRamDue = 0;
   private offSlice: (() => void) | null = null;
   private readonly ramListeners = new Set<() => void>();
+  private readonly tickSubs = new Set<TickSub>();
+  private nextTickDue = 0;
+  private tickPendingSince = Infinity;
 
   constructor(readonly machine: Machine, readonly prog: Program, private readonly space: AddressSpace) {
     let rec: CpuRecorder | null = null;
@@ -66,6 +78,28 @@ export class LiveSampler {
       if (cb) this.ramListeners.delete(cb);
       this.updateHook();
     });
+  }
+
+  /**
+   * Run `cb` on inspector ticks: at the first quiet slice boundary after subscribing, then every
+   * `tickIntervalMs`. `cb` runs inside the slice hook, so everything it reads (and anything rendered
+   * from microtasks it queues, e.g. Preact state updates) sees one consistent guest state. The
+   * kernel address space's page-table cache is cleared before each tick. Returns an unsubscribe
+   * function. Ticks only happen while the VM runs.
+   */
+  subscribeTick(cb: (torn: boolean) => void): () => void {
+    const sub: TickSub = { cb, pending: true };
+    this.tickSubs.add(sub);
+    this.updateHook();
+    return once(() => {
+      this.tickSubs.delete(sub);
+      this.updateHook();
+    });
+  }
+
+  /** Run every tick subscriber at the next quiet boundary (a manual refresh). */
+  requestTick(): void {
+    for (const s of this.tickSubs) s.pending = true;
   }
 
   /**
@@ -114,7 +148,7 @@ export class LiveSampler {
   }
 
   private updateHook(): void {
-    const want = this.cpuSubs > 0 || this.ramSubs > 0;
+    const want = this.cpuSubs > 0 || this.ramSubs > 0 || this.tickSubs.size > 0;
     if (want && !this.offSlice) this.offSlice = this.machine.onSlice((start) => this.onSlice(start));
     else if (!want && this.offSlice) {
       this.offSlice();
@@ -124,22 +158,61 @@ export class LiveSampler {
 
   private onSlice(start: number): void {
     if (this.cpuSubs > 0) this.recorder?.record(start);
-    if (this.ramSubs > 0) {
-      const now = performance.now();
-      if (now < this.nextRamDue) return;
-      if (!this.mapper) {
-        this.nextRamDue = now + this.ramIntervalMs;
-        for (const cb of this.ramListeners) cb();
-        return;
-      }
-      const m = this.machine;
-      const quiet = m.halted || m.cpl === 3;
-      if (!quiet && now < this.nextRamDue + this.maxDeferMs) return;
-      this.collectRam(!quiet);
-      // Schedule from the end of collection so a slow scan cannot eat the whole budget.
-      this.nextRamDue = performance.now() + this.ramIntervalMs;
-    }
+    if (this.ramSubs > 0) this.ramSlice();
+    if (this.tickSubs.size > 0) this.tickSlice();
   }
+
+  /** At a quiet boundary (idle or user mode) no kernel data structure can be mid-update on UP. */
+  private get quiet(): boolean {
+    const m = this.machine;
+    return m.halted || m.cpl === 3;
+  }
+
+  private ramSlice(): void {
+    const now = performance.now();
+    if (now < this.nextRamDue) return;
+    if (!this.mapper) {
+      this.nextRamDue = now + this.ramIntervalMs;
+      for (const cb of this.ramListeners) cb();
+      return;
+    }
+    const quiet = this.quiet;
+    if (!quiet && now < this.nextRamDue + this.maxDeferMs) return;
+    this.collectRam(!quiet);
+    // Schedule from the end of collection so a slow scan cannot eat the whole budget.
+    this.nextRamDue = performance.now() + this.ramIntervalMs;
+  }
+
+  private tickSlice(): void {
+    const now = performance.now();
+    const periodic = this.tickIntervalMs > 0 && now >= this.nextTickDue;
+    let pending = periodic;
+    for (const s of this.tickSubs) pending ||= s.pending;
+    if (!pending) return;
+    if (this.tickPendingSince === Infinity) this.tickPendingSince = now;
+    const quiet = this.quiet;
+    if (!quiet && now < this.tickPendingSince + this.maxDeferMs) return;
+    this.tickPendingSince = Infinity;
+    this.space.clearCache();
+    this.tickVersion++;
+    this.tickTorn = !quiet;
+    // Copy: callbacks may unsubscribe (or subscribe) while we iterate.
+    for (const s of [...this.tickSubs]) {
+      if (!periodic && !s.pending) continue;
+      s.pending = false;
+      try {
+        s.cb(!quiet);
+      } catch (e) {
+        console.error("inspector tick failed", e);
+      }
+    }
+    if (periodic) this.nextTickDue = performance.now() + this.tickIntervalMs;
+  }
+}
+
+interface TickSub {
+  cb: (torn: boolean) => void;
+  pending: boolean;
 }
 
 function once(f: () => void): () => void {

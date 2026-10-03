@@ -1,10 +1,10 @@
 # livelinux
 
-Linux running in your browser (v86, i386) with a side-panel kernel inspector. Live views (no
-pausing): a map of every physical page frame and what it is used for, and a CPU timeline with a
-statistical kernel profiler. Pause the VM to look at tasks, the CFS runqueue, process VMAs and page
-tables, kernel memory, and any global variable via a generic BTF type explorer. Fully static; no
-server.
+Linux running in your browser (v86, i386) with a side-panel kernel inspector: a map of every
+physical page frame and what it is used for, a CPU timeline with a statistical kernel profiler,
+tasks, the CFS runqueue, process VMAs and page tables, kernel memory, and any global variable via a
+generic BTF type explorer. Everything updates live while the guest runs; pause it to freeze one
+exact state. Fully static; no server.
 
 ## How it works
 

@@ -146,16 +146,10 @@ input:focus, select:focus, button:focus-visible { outline: 2px solid var(--accen
 }
 .tab.active { background: var(--panel); border-color: var(--border); color: var(--text); font-weight: 600; margin-bottom: -1px; }
 .tab-body { flex: 1; min-height: 0; overflow: auto; padding: 12px; }
-.inspector.disabled .tab-body, .inspector.disabled .tabs { filter: grayscale(1); opacity: 0.35; pointer-events: none; user-select: none; }
-.disabled-note {
-  position: absolute; inset: 0; z-index: 2;
-  display: flex; align-items: center; justify-content: center;
-  pointer-events: none;
-}
-.disabled-note span {
-  background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
-  padding: 10px 18px; color: var(--muted); box-shadow: 0 4px 24px rgba(0,0,0,0.25);
-}
+.tabs .spacer { flex: 1; }
+.refresh { display: flex; align-items: center; gap: 6px; padding: 0 2px 4px; color: var(--muted); font-size: 12px; }
+.refresh select, .refresh button { padding: 1px 6px; font-size: 12px; }
+.live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); animation: pulse 1.2s infinite; }
 
 .section { margin-bottom: 18px; }
 .section h3 {
@@ -207,6 +201,7 @@ td.num, th.num { text-align: right; }
 .hex-row { display: block; }
 .hex-off { color: var(--muted); margin-right: 14px; }
 .hex-bytes { margin-right: 10px; }
+.hex-changed { background: color-mix(in srgb, var(--warn) 35%, transparent); border-radius: 2px; }
 .hex-ascii { color: var(--user); }
 
 /* type tree */

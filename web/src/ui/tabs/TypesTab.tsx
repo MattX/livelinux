@@ -1,8 +1,9 @@
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import type { Btf, BtfMember, BtfType, Program, Value } from "../../debug/api";
 import { BtfKind } from "../../debug/api";
 import type { InspectorProps } from "../../app/types";
 import { fmtHex } from "../util";
+import { useInspectTick } from "../hooks";
 import { errMsg, parseNum } from "../util";
 
 const SUGGESTIONS = ["init_task", "runqueues", "jiffies", "pcpu_hot", "linux_banner", "init_mm", "swapper_pg_dir"];
@@ -217,8 +218,11 @@ export function TypesTab({ prog }: InspectorProps) {
   const [input, setInput] = useState("init_task");
   const [root, setRoot] = useState<{ name: string; value: Value } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** The input the current root was resolved from. */
+  const rootInput = useRef<string | null>(null);
 
   const go = (text = input) => {
+    rootInput.current = text;
     try {
       setRoot(resolveRoot(prog, text));
       setError(null);
@@ -229,6 +233,11 @@ export function TypesTab({ prog }: InspectorProps) {
   };
 
   useEffect(() => go(), []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Re-resolve the root (it may follow pointers) and re-render on each live tick / new pause; the
+  // tree reads values while rendering, which happens in a microtask before the guest runs again.
+  // The tree is keyed by the root address, so expanded nodes survive unless that address moves.
+  useInspectTick(() => rootInput.current !== null && go(rootInput.current));
 
   return (
     <div class="tab-types">

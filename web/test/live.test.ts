@@ -12,6 +12,7 @@ import { LiveSampler } from "../src/live/sampler";
 import { PageKind, PhysMapper } from "../src/live/physmap";
 import { describePage } from "../src/live/pageinfo";
 import { CPU_HALTED, CPU_IRQ, CPU_USER } from "../src/live/cputrace";
+import { forEachTask, runqueue, taskInfo } from "../src/debug/helpers";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const guest = (f: string) => resolve(root, "public/guest", f);
@@ -143,6 +144,29 @@ describe.skipIf(!have)("live sampling against the running guest", () => {
         offRam();
         expect(n).toBeGreaterThanOrEqual(5);
         expect(live.ram!.counts[PageKind.Free]).toBeGreaterThan(0);
+
+        // --- inspector ticks: kernel helpers walked inside the slice hook while running
+        live.tickIntervalMs = 200;
+        const ticks: { comms: string[]; rqCurr: number; torn: boolean }[] = [];
+        const tickErrors: unknown[] = [];
+        const offTick = live.subscribeTick((torn) => {
+          try {
+            const comms = [...forEachTask(prog)].map((t) => taskInfo(t).comm);
+            ticks.push({ comms, rqCurr: runqueue(prog).currAddr, torn });
+          } catch (e) {
+            tickErrors.push(e);
+          }
+        });
+        await sleep(1500);
+        offTick();
+        expect(tickErrors).toEqual([]);
+        expect(ticks.length).toBeGreaterThanOrEqual(4);
+        expect(ticks.some((t) => !t.torn)).toBe(true); // spin / idle give plenty of quiet boundaries
+        for (const t of ticks) {
+          expect(t.comms).toContain("spin");
+          expect(t.comms).toContain("mapper");
+          expect(t.rqCurr).not.toBe(0);
+        }
 
         // the guest is still alive and responsive
         mark = serial.length;
