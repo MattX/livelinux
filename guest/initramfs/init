@@ -17,7 +17,8 @@ export PS1='livelinux:\w # '
 hostname livelinux
 echo
 echo "=== livelinux: $(uname -sr) booted ==="
-echo "demo programs: forker [N], spin [secs], mapper (in /demo)"
+echo "demo programs (in /demo): forker [N], spin [secs], mapper, pipepair [-f],"
+echo "  slabchurn [N], fragmenter [MB], cowtouch [pages], oomer"
 echo
 
 # Keep a shell on the serial console and respawn it if it exits.
