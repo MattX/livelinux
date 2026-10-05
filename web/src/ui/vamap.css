@@ -1,5 +1,8 @@
 .vam { position: relative; font-size: 12px; }
-.vam-rows { padding: 8px 0 10px; }
+.vam-main { display: flex; align-items: flex-start; padding: 8px 0 10px; }
+.vam-rows { flex: 1; min-width: 280px; }
+.vam-head { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.vam-head label { display: inline-flex; align-items: center; gap: 4px; color: var(--text); cursor: pointer; }
 
 .vam-row { position: relative; display: grid; grid-template-columns: 84px minmax(0, 1fr) 112px; }
 
@@ -41,7 +44,9 @@
   height: 100%; display: flex; align-items: center; justify-content: center; cursor: pointer;
   color: var(--muted); font-size: 10.5px; font-style: italic;
   border-left: 3px dotted var(--border);
+  white-space: nowrap; overflow: hidden;
 }
+.vam-gap > span { overflow: hidden; text-overflow: ellipsis; padding: 0 6px; }
 .vam-gap.big {
   background:
     linear-gradient(var(--panel), var(--panel)) center / 100% 60% no-repeat,
@@ -61,3 +66,16 @@
   background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
   box-shadow: 0 -4px 12px color-mix(in srgb, var(--bg) 70%, transparent);
 }
+
+/* physical column */
+.vam-phys { flex: none; display: flex; position: relative; }
+.vam-connect { display: block; overflow: visible; }
+.vam-connect line { stroke-width: 1.5; opacity: 0.9; }
+.vam-connect line.hover { stroke: var(--accent); opacity: 1; stroke-width: 1.5; }
+.vam-physmap { display: block; cursor: crosshair; outline: 1px solid var(--border); }
+.vam-physlabels { position: relative; width: 70px; }
+.vam-physlabels span {
+  position: absolute; left: 6px; transform: translateY(-50%);
+  font-size: 10.5px; line-height: 1; color: var(--muted); white-space: nowrap;
+}
+.vam-alias { margin-right: 12px; white-space: nowrap; }

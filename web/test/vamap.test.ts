@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addMapped, ADDR_TOP, userRegion, vaRows, vmFlagsStr, type VaRegion, type VmaInfo } from "../src/debug/helpers";
+import { addMapped, ADDR_TOP, clipRanges, isDirectMapped, userRegion, vaRows, virtualAliases, vmFlagsStr, type VaRegion, type VmaInfo } from "../src/debug/helpers";
 import type { MappedRange } from "../src/vm/types";
 
 function vma(start: number, end: number, flags: number, file?: string, anonName?: string): VmaInfo {
@@ -85,5 +85,34 @@ describe("addMapped", () => {
     expect(prog.children!.map((c) => c.mapped)).toEqual([0x1000, 0x1000, 0, 0x1000]);
     expect(u.children![4].mapped).toBe(0x1000);
     expect(u.mapped).toBe(0x4000);
+  });
+});
+
+describe("virtual -> physical", () => {
+  const ranges: MappedRange[] = [
+    { va: 0x08048000, pa: 0x00200000, size: 0x2000, writable: false, user: true, large: false },
+    { va: 0xc0000000, pa: 0, size: 0x01000000, writable: true, user: false, large: true },
+    { va: 0xcf800000, pa: 0x00201000, size: 0x1000, writable: true, user: false, large: false },
+  ];
+
+  it("clips page-table runs to a region with their physical addresses", () => {
+    expect(clipRanges(ranges, 0x08049000, 0x0804a000)).toEqual([{ va: 0x08049000, pa: 0x00201000, size: 0x1000 }]);
+    expect(clipRanges(ranges, 0x0804a000, 0xc0000000)).toEqual([]);
+    expect(clipRanges(ranges, 0xc0800000, 0xd0000000)).toEqual([
+      { va: 0xc0800000, pa: 0x00800000, size: 0x00800000 },
+      { va: 0xcf800000, pa: 0x00201000, size: 0x1000 },
+    ]);
+  });
+
+  it("recognizes the direct map", () => {
+    expect(isDirectMapped(clipRanges(ranges, 0xc0000000, 0xc1000000))).toBe(true);
+    expect(isDirectMapped(clipRanges(ranges, 0xcf800000, 0xd0000000))).toBe(false);
+    expect(isDirectMapped(clipRanges(ranges, 0x08048000, 0x0804a000))).toBe(false);
+    expect(isDirectMapped([])).toBe(false);
+  });
+
+  it("finds every alias of a frame", () => {
+    // user page, its direct-map alias, and a vmalloc mapping of the same frame
+    expect(virtualAliases(ranges, 0x00201000)).toEqual([0x08049000, 0xc0201000, 0xcf800000]);
   });
 });

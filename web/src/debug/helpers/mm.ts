@@ -140,32 +140,6 @@ export function mmPgdPhys(mm: Value): number {
   return (m.member("pgd").ptr() - PAGE_OFFSET) >>> 0;
 }
 
-export interface KernelLayoutEntry {
-  name: string;
-  addr: number;
-  /** symbol: System.map address; variable: value of a kernel variable; derived: computed. */
-  kind: "symbol" | "variable" | "derived";
-  note?: string;
-}
-
-/** Notable kernel virtual addresses (best effort; entries whose symbol is missing are skipped), sorted by address. */
-export function kernelLayout(prog: Program): KernelLayoutEntry[] {
-  const out: KernelLayoutEntry[] = [{ name: "PAGE_OFFSET", addr: PAGE_OFFSET, kind: "derived", note: "start of kernel direct map" }];
-  for (const name of ["_text", "_etext", "_sdata", "_edata", "__init_begin", "__init_end", "__bss_start", "__bss_stop", "_end"]) {
-    const addr = prog.symbols.addr(name);
-    if (addr !== undefined) out.push({ name, addr, kind: "symbol" });
-  }
-  const hm = tryGet(() => prog.var("high_memory").ptr());
-  if (hm !== undefined) {
-    out.push({ name: "high_memory", addr: hm, kind: "variable", note: "end of direct-mapped lowmem" });
-    out.push({
-      name: "VMALLOC_START", addr: (hm + VMALLOC_OFFSET) >>> 0, kind: "derived",
-      note: "high_memory + 8 MiB (VMALLOC_OFFSET)",
-    });
-  }
-  return out.sort((a, b) => a.addr - b.addr);
-}
-
 const hex8 = (n: number) => (n >>> 0).toString(16).padStart(8, "0");
 
 /** /proc/pid/maps-like text (32-bit layout; path column padded as in seq_pad). */

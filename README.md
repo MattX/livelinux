@@ -4,9 +4,10 @@ Linux running in your browser (v86, i386) with a side-panel kernel inspector: a 
 physical page frame and what it is used for, a CPU timeline with a statistical kernel profiler,
 tasks, the EEVDF scheduler on a virtual-time number line, a memory-map diagram of the whole 4 GiB
 virtual address space (the selected process's VMAs over the kernel's direct map, vmalloc area and
-fixmap), each process's address space page by page
-(demand paging, shared page cache, copy-on-write after fork), a graph of open files with pipes drawn
-as live ring buffers, kernel memory, and any global variable via a generic BTF type explorer.
+fixmap) next to physical RAM, showing which frames back each region, with page tables and a hex
+viewer for any of it, each process's address space page by page (demand paging, shared page cache,
+copy-on-write after fork), a graph of open files with pipes drawn as live ring buffers, and any
+global variable via a generic BTF type explorer.
 Everything updates live while the guest runs; pause it to freeze one exact state. Clicking a process
 anywhere selects it in every view. Fully static; no server.
 

@@ -5,7 +5,11 @@
 
 import { useMemo, useState } from "preact/hooks";
 import type { ComponentChildren } from "preact";
-import { ADDR_TOP, vaRows, type RegionKind, type VaMarker, type VaRegion, type VaRow } from "../debug/helpers";
+import {
+  ADDR_TOP, clipRanges, isDirectMapped, vaRows, virtualAliases, type PhysPiece, type RegionKind, type VaMarker, type VaRegion, type VaRow,
+} from "../debug/helpers";
+import type { MappedRange } from "../vm/types";
+import { PhysColumn } from "./PhysColumn";
 import { fmtHex, fmtSize } from "./util";
 import "./vamap.css";
 
@@ -70,14 +74,56 @@ function placeMarkers(rows: VaRow[], heights: number[], markers: VaMarker[]): Ma
   return out;
 }
 
-export function VaMap({ roots, markers, footer }: { roots: VaRegion[]; markers: VaMarker[]; footer?: ComponentChildren }) {
+export const rowKey = (r: VaRow) => (r.type === "region" ? r.r.id : `gap:${r.start}`);
+
+export interface VaMapProps {
+  roots: VaRegion[];
+  markers: VaMarker[];
+  /** Present page-table runs of the whole space (user and kernel), ascending. */
+  ranges: MappedRange[];
+  /** Bytes of physical RAM; 0 hides the physical column. */
+  physTop: number;
+  /** Key (rowKey) of the pinned row, controlled by the parent. */
+  pinned: string | null;
+  onPin: (row: VaRow | null) => void;
+  onPickPfn?: (pfn: number) => void;
+  footer?: ComponentChildren;
+}
+
+export function VaMap({ roots, markers, ranges, physTop, pinned, onPin, onPickPfn, footer }: VaMapProps) {
   const [openState, setOpenState] = useState<Record<string, boolean>>({});
   const [hover, setHover] = useState<string | null>(null);
-  const [pinned, setPinned] = useState<string | null>(null);
+  const [hoverPfn, setHoverPfn] = useState<number | null>(null);
+  const setPinned = (key: string | null, row: VaRow) => onPin(key === null ? null : row);
 
   const rows = useMemo(() => vaRows(roots, (r) => openState[r.id] ?? r.open ?? false), [roots, openState]);
   const heights = useMemo(() => rows.map(rowHeight), [rows]);
   const marks = useMemo(() => placeMarkers(rows, heights, markers), [rows, heights, markers]);
+  const { tops, H } = useMemo(() => {
+    const t: number[] = [];
+    let y = 0;
+    for (const h of heights) {
+      t.push(y);
+      y += h;
+    }
+    return { tops: t, H: y };
+  }, [heights]);
+  // Physical pieces of the rows that tile the space (leaves, collapsed regions).
+  const { pieces, linear, colors } = useMemo(() => {
+    const pieces: PhysPiece[][] = rows.map((r) => (r.type === "region" && !r.open ? clipRanges(ranges, r.start, r.end) : []));
+    return {
+      pieces,
+      linear: pieces.map(isDirectMapped),
+      colors: rows.map((r) => (r.type === "region" ? KIND_COLOR[r.r.kind] : "transparent")),
+    };
+  }, [rows, ranges]);
+  const hoverVas = useMemo(() => {
+    if (hoverPfn === null) return [];
+    return virtualAliases(ranges, hoverPfn * 4096).flatMap((va) => {
+      const row = rows.findIndex((r) => !(r.type === "region" && r.open) && r.start <= va && va < r.end);
+      return row >= 0 ? [{ va, row }] : [];
+    });
+  }, [hoverPfn, ranges, rows]);
 
   // Colour of each open ancestor, for the rails on the left of nested rows.
   const rails: string[][] = [];
@@ -88,13 +134,14 @@ export function VaMap({ roots, markers, footer }: { roots: VaRegion[]; markers: 
     if (r.type === "region" && r.open) stack.push(KIND_COLOR[r.r.kind]);
   }
 
-  const rowKey = (r: VaRow) => (r.type === "region" ? r.r.id : `gap:${r.start}`);
   const focusKey = pinned ?? hover;
-  const focus = rows.find((r) => rowKey(r) === focusKey);
+  const focusIdx = rows.findIndex((r) => rowKey(r) === focusKey);
+  const focus = focusIdx >= 0 ? rows[focusIdx] : undefined;
 
   let lastLabel = -1;
   return (
     <div class="vam">
+      <div class="vam-main">
       <div class="vam-rows" onMouseLeave={() => setHover(null)}>
         {rows.map((row, i) => {
           const key = rowKey(row);
@@ -105,10 +152,10 @@ export function VaMap({ roots, markers, footer }: { roots: VaRegion[]; markers: 
           const color = row.type === "region" ? KIND_COLOR[row.r.kind] : "transparent";
           const size = row.end - row.start;
           const onClick = () => {
-            if (row.type !== "region") return setPinned(pinned === key ? null : key);
+            if (row.type !== "region") return setPinned(pinned === key ? null : key, row);
             if (row.expandable && !row.open) setOpenState({ ...openState, [row.r.id]: true });
             else if (row.expandable && row.open) setOpenState({ ...openState, [row.r.id]: false });
-            else setPinned(pinned === key ? null : key);
+            else setPinned(pinned === key ? null : key, row);
           };
           return (
             <div key={key} class="vam-row" style={{ height: `${h}px` }} onMouseEnter={() => setHover(key)}>
@@ -143,8 +190,32 @@ export function VaMap({ roots, markers, footer }: { roots: VaRegion[]; markers: 
           );
         })}
       </div>
+      {physTop > 0 && (
+        <PhysColumn
+          rows={rows}
+          tops={tops}
+          heights={heights}
+          H={H}
+          pieces={pieces}
+          linear={linear}
+          colors={colors}
+          physTop={physTop}
+          focus={hoverPfn === null ? focusIdx : -1}
+          hoverPfn={hoverPfn}
+          hoverVas={hoverVas}
+          onHoverPfn={setHoverPfn}
+          onPickPfn={(f) => onPickPfn?.(f)}
+        />
+      )}
+      </div>
       <div class="vam-card">
-        {focus ? <Card row={focus} markers={markers} pinned={pinned !== null} /> : footer}
+        {hoverPfn !== null ? (
+          <PfnCard pfn={hoverPfn} vas={hoverVas} rows={rows} />
+        ) : focus ? (
+          <Card row={focus} markers={markers} pinned={pinned !== null} pieces={pieces[focusIdx]} linear={linear[focusIdx]} />
+        ) : (
+          footer
+        )}
       </div>
     </div>
   );
@@ -178,7 +249,33 @@ function Block({ row, color, h, pinned, onClick }: { row: Extract<VaRow, { type:
   );
 }
 
-function Card({ row, markers, pinned }: { row: VaRow; markers: VaMarker[]; pinned: boolean }) {
+function PfnCard({ pfn, vas, rows }: { pfn: number; vas: { va: number; row: number }[]; rows: VaRow[] }) {
+  return (
+    <>
+      <div>
+        <b>page frame {pfn}</b> <span class="muted">phys {fmtHex(pfn * 4096)} · click to dump it in the hex viewer</span>
+      </div>
+      {vas.length ? (
+        <div>
+          mapped at{" "}
+          {vas.map(({ va, row }) => {
+            const r = rows[row];
+            return (
+              <span key={va} class="vam-alias">
+                {fmtHex(va)} <span class="muted">({r.type === "region" ? r.r.label : r.label})</span>
+              </span>
+            );
+          })}
+        </div>
+      ) : (
+        <div class="muted">not mapped in this address space</div>
+      )}
+      {vas.length > 1 && <div class="muted">One frame, several virtual addresses: every lowmem frame is also reachable through the kernel's direct map.</div>}
+    </>
+  );
+}
+
+function Card({ row, markers, pinned, pieces, linear }: { row: VaRow; markers: VaMarker[]; pinned: boolean; pieces?: PhysPiece[]; linear?: boolean }) {
   const size = row.end - row.start;
   const inside = markers.filter((m) => row.start <= m.addr && m.addr < row.end);
   const r = row.type === "region" ? row.r : undefined;
@@ -193,6 +290,13 @@ function Card({ row, markers, pinned }: { row: VaRow; markers: VaMarker[]; pinne
       {r?.mapped !== undefined && (
         <div class="muted">
           {Math.round(r.mapped / 4096)} of {Math.round(size / 4096)} pages present in the page tables ({fmtSize(r.mapped)})
+        </div>
+      )}
+      {pieces && pieces.length > 0 && (
+        <div class="muted">
+          {linear
+            ? `direct map: phys ${fmtHex(pieces[0].pa)}–${fmtHex(pieces[pieces.length - 1].pa + pieces[pieces.length - 1].size)} (va − PAGE_OFFSET)`
+            : `${pieces.length} physical run${pieces.length === 1 ? "" : "s"}, lines show where each lands in RAM`}
         </div>
       )}
       {inside.length > 0 && (

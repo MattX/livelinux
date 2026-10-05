@@ -391,3 +391,49 @@ export function vaRows(roots: VaRegion[], isOpen: (r: VaRegion) => boolean, lo =
   if (cur > lo) out.push({ type: "gap", depth, label: gapLabel(lo, undefined, sorted[0]), start: lo, end: cur });
   return out;
 }
+
+// ---------------------------------------------------------------------------------------------
+// virtual -> physical
+
+export interface PhysPiece {
+  va: number;
+  pa: number;
+  size: number;
+}
+
+/** The parts of ascending page-table `ranges` that fall in [lo, hi), with their physical addresses. */
+export function clipRanges(ranges: MappedRange[], lo: number, hi: number): PhysPiece[] {
+  let a = 0;
+  let b = ranges.length;
+  while (a < b) {
+    const mid = (a + b) >>> 1;
+    if (ranges[mid].va + ranges[mid].size <= lo) a = mid + 1;
+    else b = mid;
+  }
+  const out: PhysPiece[] = [];
+  for (let i = a; i < ranges.length && ranges[i].va < hi; i++) {
+    const r = ranges[i];
+    const s = Math.max(lo, r.va);
+    const e = Math.min(hi, r.va + r.size);
+    if (e > s) out.push({ va: s, pa: r.pa + (s - r.va), size: e - s });
+  }
+  return out;
+}
+
+/** True if (almost) all of the mapped bytes are the kernel's linear direct map, va = pa + PAGE_OFFSET. */
+export function isDirectMapped(pieces: PhysPiece[]): boolean {
+  let lin = 0;
+  let all = 0;
+  for (const p of pieces) {
+    all += p.size;
+    if (p.va - p.pa === PAGE_OFFSET) lin += p.size;
+  }
+  return all > 0 && lin >= 0.9 * all;
+}
+
+/** Every virtual address at which physical address `pa` is mapped. */
+export function virtualAliases(ranges: MappedRange[], pa: number): number[] {
+  const out: number[] = [];
+  for (const r of ranges) if (pa >= r.pa && pa < r.pa + r.size) out.push(r.va + (pa - r.pa));
+  return out;
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatMaps, kernelLayout, mmPgdPhys, vmas, vmFlagsStr } from "../src/debug/helpers";
+import { formatMaps, kernelRegion, mmPgdPhys, vmas, vmFlagsStr } from "../src/debug/helpers";
 import { allocObj, buildKernel, buildMapleTree, type Kernel, type MapleRange } from "./util/helperFakes";
 
 function mkDentry(k: Kernel, name: string, parent: number | null, inlineName = false): number {
@@ -141,23 +141,37 @@ describe("vmas / formatMaps", () => {
   });
 });
 
-describe("kernelLayout", () => {
-  it("lists symbols present, high_memory and derived VMALLOC_START, sorted", () => {
+describe("kernelRegion", () => {
+  it("splits the direct map around the kernel image, from symbols and high_memory", () => {
     const k = buildKernel();
     k.prog.defineSymbol("_text", 0xc1000000);
     k.prog.defineSymbol("_etext", 0xc1600000);
     k.prog.defineSymbol("__bss_start", 0xc1900000);
+    k.prog.defineSymbol("__bss_stop", 0xc1a00000);
+    k.prog.defineSymbol("_end", 0xc1b00000);
     const hm = k.prog.defineVar("high_memory", "ptr:void");
     k.mem.writeUint(hm, 4, 0xc8000000);
-    const l = kernelLayout(k.prog);
-    const names = l.map((e) => e.name);
-    expect(names).toEqual(["PAGE_OFFSET", "_text", "_etext", "__bss_start", "high_memory", "VMALLOC_START"]);
-    expect(l.find((e) => e.name === "VMALLOC_START")!.addr).toBe(0xc8800000);
-    expect(l.find((e) => e.name === "high_memory")!.kind).toBe("variable");
+    const kr = kernelRegion(k.prog);
+    expect(kr.children!.map((c) => [c.id, c.start, c.end])).toEqual([
+      ["k.dm", 0xc0000000, 0xc8000000],
+      ["k.vmoff", 0xc8000000, 0xc8800000],
+    ]);
+    const dm = kr.children![0];
+    expect(dm.children!.map((c) => c.label)).toEqual(["low memory below the kernel", "kernel image", "lowmem (page allocator)"]);
+    const img = dm.children![1];
+    // holes between the sections are filled
+    expect(img.children!.map((c) => [c.label, c.start, c.end])).toEqual([
+      [".text", 0xc1000000, 0xc1600000],
+      ["other sections / padding", 0xc1600000, 0xc1900000],
+      [".bss", 0xc1900000, 0xc1a00000],
+      ["other sections / padding", 0xc1a00000, 0xc1b00000],
+    ]);
+    expect(dm.detail).toBe("phys 0x00000000–0x08000000");
   });
 
   it("is best-effort without high_memory", () => {
     const k = buildKernel();
-    expect(kernelLayout(k.prog).map((e) => e.name)).toEqual(["PAGE_OFFSET"]);
+    const kr = kernelRegion(k.prog);
+    expect([kr.start, kr.end, kr.children]).toEqual([0xc0000000, 0x100000000, []]);
   });
 });

@@ -7,7 +7,6 @@ import type { InspectorProps, LiveTabProps } from "../app/types";
 import { OverviewTab } from "./tabs/OverviewTab";
 import { TasksTab } from "./tabs/TasksTab";
 import { SchedulerTab } from "./tabs/SchedulerTab";
-import { MemoryTab } from "./tabs/MemoryTab";
 import { TypesTab } from "./tabs/TypesTab";
 import { RamTab } from "./tabs/RamTab";
 import { CpuTab } from "./tabs/CpuTab";
@@ -40,7 +39,6 @@ const TABS: Tab[] = [
   { id: "vamap", label: "Address space", live: false, C: VaMapTab },
   { id: "sched", label: "Scheduler", live: false, C: SchedulerTab },
   { id: "files", label: "Files", live: false, C: FilesTab },
-  { id: "memory", label: "Memory", live: false, C: MemoryTab },
   { id: "types", label: "Types", live: false, C: TypesTab },
 ];
 
