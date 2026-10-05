@@ -190,7 +190,10 @@ export function PhysColumn(p: PhysProps) {
       plo = Math.min(plo, pc.pa);
       phi = Math.max(phi, pc.pa + pc.size);
     }
-    const pts = `0,${vaY(i, vhi)} ${CONNECT_W},${physY(phi)} ${CONNECT_W},${physY(plo)} 0,${vaY(i, vlo)}`;
+    // straight out of the region through the pointer-label column, then across to the frames
+    const top = vaY(i, vhi);
+    const bot = vaY(i, vlo);
+    const pts = `${-MARKS_W},${top} 0,${top} ${CONNECT_W},${physY(phi)} ${CONNECT_W},${physY(plo)} 0,${bot} ${-MARKS_W},${bot}`;
     ribbons.push(<polygon key={i} points={pts} style={{ fill: colors[i], opacity: i === focus ? 0.4 : focus >= 0 && !linear[focus] ? 0.05 : 0.14 }} />);
   }
   const lines = [];

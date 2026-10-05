@@ -59,6 +59,7 @@
 .vam-mark {
   position: absolute; left: 3px; transform: translateY(-50%);
   font-size: 10.5px; line-height: 1.1; color: var(--accent); white-space: nowrap; cursor: help;
+  z-index: 1; /* above the ribbons and lines that cross this column */
 }
 
 .vam-card {
@@ -68,7 +69,7 @@
 }
 
 /* physical column */
-.vam-phys { flex: none; display: flex; position: relative; }
+.vam-phys { flex: none; display: flex; position: relative; z-index: 0; }
 .vam-connect { display: block; overflow: visible; pointer-events: none; }
 .vam-connect polyline { fill: none; stroke-width: 1.5; opacity: 0.9; stroke-linejoin: round; }
 .vam-connect polyline.hover { stroke: var(--accent); opacity: 1; stroke-width: 1.5; }
