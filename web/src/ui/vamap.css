@@ -1,10 +1,10 @@
-.vam { position: relative; font-size: 12px; }
+.vam { position: relative; font-size: 12px; --marks-w: 112px; /* MARKS_W in PhysColumn.tsx */ }
 .vam-main { display: flex; align-items: flex-start; padding: 8px 0 10px; }
 .vam-rows { flex: 1; min-width: 280px; }
 .vam-head { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .vam-head label { display: inline-flex; align-items: center; gap: 4px; color: var(--text); cursor: pointer; }
 
-.vam-row { position: relative; display: grid; grid-template-columns: 84px minmax(0, 1fr) 112px; }
+.vam-row { position: relative; display: grid; grid-template-columns: 84px minmax(0, 1fr) var(--marks-w); }
 
 .vam-gutter { position: relative; }
 .vam-addr { position: absolute; right: 8px; font-size: 10.5px; color: var(--muted); line-height: 1; white-space: nowrap; }
@@ -69,9 +69,9 @@
 
 /* physical column */
 .vam-phys { flex: none; display: flex; position: relative; }
-.vam-connect { display: block; overflow: visible; }
-.vam-connect line { stroke-width: 1.5; opacity: 0.9; }
-.vam-connect line.hover { stroke: var(--accent); opacity: 1; stroke-width: 1.5; }
+.vam-connect { display: block; overflow: visible; pointer-events: none; }
+.vam-connect polyline { fill: none; stroke-width: 1.5; opacity: 0.9; stroke-linejoin: round; }
+.vam-connect polyline.hover { stroke: var(--accent); opacity: 1; stroke-width: 1.5; }
 .vam-physmap { display: block; cursor: crosshair; outline: 1px solid var(--border); }
 .vam-physlabels { position: relative; width: 70px; }
 .vam-physlabels span {

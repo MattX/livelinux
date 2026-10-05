@@ -9,6 +9,8 @@ import type { VaRow, PhysPiece } from "../debug/helpers";
 import { fmtHex } from "./util";
 
 export const CONNECT_W = 48;
+/** Width of the pointer-label column between the map and this one (--marks-w in vamap.css). */
+const MARKS_W = 112;
 export const PHYS_W = 100;
 const MAX_LINES = 400;
 
@@ -62,6 +64,11 @@ function toRgb(el: Element, c: string): [number, number, number] {
   }
   rgbCache.set(s, rgb);
   return rgb;
+}
+
+/** A virtual -> physical line: straight out of the region through the pointer-label column, then across. */
+function Link({ y1, y2, cls, style }: { y1: number; y2: number; cls?: string; style?: Record<string, string> }) {
+  return <polyline class={cls} points={`${-MARKS_W},${y1} 0,${y1} ${CONNECT_W},${y2}`} style={style} />;
 }
 
 export function PhysColumn(p: PhysProps) {
@@ -193,14 +200,14 @@ export function PhysColumn(p: PhysProps) {
     for (let j = 0; j < list.length; j += step) {
       const pc = list[j];
       lines.push(
-        <line key={j} x1={0} y1={vaY(focus, pc.va + pc.size / 2)} x2={CONNECT_W} y2={physY(pc.pa + pc.size / 2)} style={{ stroke: colors[focus] }} />,
+        <Link key={j} y1={vaY(focus, pc.va + pc.size / 2)} y2={physY(pc.pa + pc.size / 2)} style={{ stroke: colors[focus] }} />,
       );
     }
   }
   if (p.hoverPfn !== null) {
     const y2 = physY(p.hoverPfn * 4096 + 2048);
     p.hoverVas.forEach(({ va, row }, j) => {
-      lines.push(<line key={`h${j}`} class="hover" x1={0} y1={vaY(row, va)} x2={CONNECT_W} y2={y2} />);
+      lines.push(<Link key={`h${j}`} cls="hover" y1={vaY(row, va)} y2={y2} />);
     });
   }
 
