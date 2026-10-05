@@ -7,3 +7,4 @@ export * from "./sched";
 export * from "./mm";
 export * from "./files";
 export * from "./pagemap";
+export * from "./vamap";

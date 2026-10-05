@@ -1,0 +1,63 @@
+.vam { position: relative; font-size: 12px; }
+.vam-rows { padding: 8px 0 10px; }
+
+.vam-row { position: relative; display: grid; grid-template-columns: 84px minmax(0, 1fr) 112px; }
+
+.vam-gutter { position: relative; }
+.vam-addr { position: absolute; right: 8px; font-size: 10.5px; color: var(--muted); line-height: 1; white-space: nowrap; }
+.vam-addr.top { top: -5px; }
+.vam-addr.bottom { bottom: -5px; }
+
+.vam-body { position: relative; border-top: 1px solid var(--border); min-width: 0; }
+.vam-row:last-child .vam-body { border-bottom: 1px solid var(--border); }
+.vam-rail { position: absolute; top: 0; bottom: 0; width: 3px; opacity: 0.75; }
+
+.vam-block {
+  position: relative; height: 100%; overflow: hidden; cursor: pointer;
+  display: flex; flex-direction: column; justify-content: center; gap: 1px;
+  padding: 0 8px 0 9px;
+  background: color-mix(in srgb, var(--c) 18%, var(--panel));
+  border-left: 3px solid var(--c);
+}
+.vam-block:hover { background: color-mix(in srgb, var(--c) 28%, var(--panel)); }
+.vam-block.open { background: color-mix(in srgb, var(--c) 10%, var(--panel)); }
+.vam-block.dim { background: repeating-linear-gradient(-45deg, var(--panel-2) 0 4px, var(--panel) 4px 8px); border-left-color: var(--border); color: var(--muted); }
+.vam-block.pinned, .vam-gap.pinned { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.vam-line { display: flex; align-items: baseline; gap: 8px; min-width: 0; white-space: nowrap; }
+.vam-caret { color: var(--muted); width: 10px; flex: none; }
+.vam-label { font-weight: 600; overflow: hidden; text-overflow: ellipsis; flex: none; max-width: 45%; }
+.vam-size { color: var(--muted); flex: none; }
+.vam-detail { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; font-size: 11px; }
+.vam-line .vam-detail { flex: 1; }
+.vam-mapped {
+  margin-left: auto; flex: none; align-self: center;
+  width: 44px; height: 5px; border-radius: 3px; overflow: hidden;
+  background: color-mix(in srgb, var(--c) 18%, var(--panel-2)); border: 1px solid color-mix(in srgb, var(--c) 45%, transparent);
+}
+.vam-mapped > span { display: block; height: 100%; background: var(--c); }
+
+.vam-gap {
+  height: 100%; display: flex; align-items: center; justify-content: center; cursor: pointer;
+  color: var(--muted); font-size: 10.5px; font-style: italic;
+  border-left: 3px dotted var(--border);
+}
+.vam-gap.big {
+  background:
+    linear-gradient(var(--panel), var(--panel)) center / 100% 60% no-repeat,
+    repeating-linear-gradient(135deg, var(--border) 0 1px, transparent 1px 7px);
+}
+.vam-gap:hover { color: var(--text); }
+
+.vam-mline { position: absolute; left: 0; right: 0; height: 0; border-top: 1px dashed var(--accent); opacity: 0.55; pointer-events: none; }
+.vam-marks { position: relative; }
+.vam-mark {
+  position: absolute; left: 3px; transform: translateY(-50%);
+  font-size: 10.5px; line-height: 1.1; color: var(--accent); white-space: nowrap; cursor: help;
+}
+
+.vam-card {
+  position: sticky; bottom: 0; padding: 6px 10px; min-height: 58px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
+  box-shadow: 0 -4px 12px color-mix(in srgb, var(--bg) 70%, transparent);
+}

@@ -157,9 +157,13 @@ function UserSpace({ prog, machine, d, showMaps, setShowMaps }: InspectorProps &
   const ranges = useCompute(() => machine.addressSpace(d.pgdPhys).walkRanges(0, 0xc0000000), [machine, prog, d.pgdPhys]);
   const vm = d.vmas;
   const [showPt, setShowPt] = useState(false);
+  const sel = useSelection();
   return (
     <>
-      <Section title="Address space, page by page" right="0 – 3 GiB; one cell per 4 KiB page">
+      <Section
+        title="Address space, page by page"
+        right={<>0 – 3 GiB; one cell per 4 KiB page · <a style={{ cursor: "pointer", color: "var(--accent)" }} onClick={() => sel.goto("vamap")}>whole map</a></>}
+      >
         {d.pages.ok ? <AddressSpaceView prog={prog} pages={d.pages.value} /> : <ErrorBox error={d.pages.error} />}
       </Section>
       <Section
