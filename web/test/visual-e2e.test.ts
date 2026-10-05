@@ -8,7 +8,10 @@ import { Machine } from "../src/vm/machine";
 import { parseBtf } from "../src/debug/btf";
 import { parseSystemMap } from "../src/debug/symbols";
 import { KernelProgram } from "../src/debug/program";
-import { eevdf, findTask, forEachTask, mmPgdPhys, PageUse, runqueue, taskInfo, vmaPages, vmas, whoMaps } from "../src/debug/helpers";
+import {
+  addMapped, eevdf, findTask, forEachTask, kernelRegion, mmPgdPhys, PageUse, runqueue, taskInfo, userRegion, userRegs, vaRows, vmaPages, vmas,
+  whoMaps, type VaRegion,
+} from "../src/debug/helpers";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const guest = (f: string) => resolve(root, "public/guest", f);
@@ -101,6 +104,35 @@ describe.skipIf(!have)("visual views against the live guest", () => {
         for (let i = 0; i < 16; i++) expect(useAt(anon + i * 4096).use).toBe(PageUse.Anon);
         const none = useAt(parseInt(hdr[3], 16) + 5 * 4096);
         expect(none).toEqual({ use: PageUse.ProtNone, flags: "---p" });
+
+        // Address-space map: mapper's binary is one group; the kernel half has the image, mem_map,
+        // vmalloc and the fixmap where the formulas put them, and user ip / sp are in mappings.
+        const mtask = findTask(prog, Number(hdr[1]))!;
+        const mmm = mtask.member("mm").deref();
+        const user = userRegion(vmas(prog, mmm));
+        addMapped(user, m.addressSpace(mmPgdPhys(mmm)).walkRanges(0, 0xc0000000));
+        const exe = user.children!.find((r) => r.label === "mapper")!;
+        expect(exe.children!.map((c) => c.kind)).toContain("code");
+        expect(exe.mapped).toBeGreaterThan(0);
+        const kspace = m.kernelSpace((swapper - 0xc0000000) >>> 0);
+        const kr = kspace.walkRanges(0xc0000000, 0x100000000);
+        const kernel = kernelRegion(prog, kr);
+        addMapped(kernel, kr);
+        const byId = (r: VaRegion, id: string): VaRegion | undefined =>
+          r.id === id ? r : r.children?.map((c) => byId(c, id)).find(Boolean);
+        expect(byId(kernel, "k.img.text")!.start).toBe(symbols.addr("_text"));
+        expect(byId(kernel, "k.dm")!.mapped).toBe(byId(kernel, "k.dm")!.end - 0xc0000000);
+        const memMap = byId(kernel, "k.dm.memmap")!;
+        expect(memMap.start).toBe(prog.var("mem_map").ptr());
+        expect(byId(kernel, "k.vmalloc")!.start).toBe(prog.var("high_memory").ptr() + 8 * 1024 * 1024);
+        // cpu_entry_area is mapped (GDT / TSS / entry stack) and sits below the fixmap.
+        expect(byId(kernel, "k.cea")!.mapped).toBeGreaterThan(0);
+        expect(byId(kernel, "k.cea")!.end).toBeLessThanOrEqual(byId(kernel, "k.fix")!.start);
+        const ur = userRegs(prog, mtask)!;
+        const leaves = vaRows([user, kernel], () => true).filter((r) => r.type === "region" && !r.open);
+        const leafAt = (a: number) => leaves.find((r) => r.start <= a && a < r.end);
+        expect(leafAt(ur.ip)?.type).toBe("region");
+        expect(leafAt(ur.sp)).toMatchObject({ r: { kind: "stack" } });
 
         // EEVDF: three spinners are runnable; the pick is an eligible on-rq task.
         const ev = eevdf(runqueue(prog).cfs);

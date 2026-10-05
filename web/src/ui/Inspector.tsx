@@ -7,11 +7,11 @@ import type { InspectorProps, LiveTabProps } from "../app/types";
 import { OverviewTab } from "./tabs/OverviewTab";
 import { TasksTab } from "./tabs/TasksTab";
 import { SchedulerTab } from "./tabs/SchedulerTab";
-import { MemoryTab } from "./tabs/MemoryTab";
 import { TypesTab } from "./tabs/TypesTab";
 import { RamTab } from "./tabs/RamTab";
 import { CpuTab } from "./tabs/CpuTab";
 import { FilesTab } from "./tabs/FilesTab";
+import { VaMapTab } from "./tabs/VaMapTab";
 import { taskColor } from "../live/cpuStats";
 import { ErrorBox } from "./common";
 import { InspectContext } from "./hooks";
@@ -36,9 +36,9 @@ const TABS: Tab[] = [
   { id: "cpu", label: "CPU", live: true, C: CpuTab },
   { id: "overview", label: "Overview", live: false, C: OverviewTab },
   { id: "tasks", label: "Tasks", live: false, C: TasksTab },
+  { id: "vamap", label: "Address space", live: false, C: VaMapTab },
   { id: "sched", label: "Scheduler", live: false, C: SchedulerTab },
   { id: "files", label: "Files", live: false, C: FilesTab },
-  { id: "memory", label: "Memory", live: false, C: MemoryTab },
   { id: "types", label: "Types", live: false, C: TypesTab },
 ];
 

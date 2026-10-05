@@ -2,9 +2,12 @@
 
 Linux running in your browser (v86, i386) with a side-panel kernel inspector: a map of every
 physical page frame and what it is used for, a CPU timeline with a statistical kernel profiler,
-tasks, the EEVDF scheduler on a virtual-time number line, each process's address space page by page
-(demand paging, shared page cache, copy-on-write after fork), a graph of open files with pipes drawn
-as live ring buffers, kernel memory, and any global variable via a generic BTF type explorer.
+tasks, the EEVDF scheduler on a virtual-time number line, a memory-map diagram of the whole 4 GiB
+virtual address space (the selected process's VMAs over the kernel's direct map, vmalloc area and
+fixmap) next to physical RAM, showing which frames back each region, with page tables and a hex
+viewer for any of it, each process's address space page by page (demand paging, shared page cache,
+copy-on-write after fork), a graph of open files with pipes drawn as live ring buffers, and any
+global variable via a generic BTF type explorer.
 Everything updates live while the guest runs; pause it to freeze one exact state. Clicking a process
 anywhere selects it in every view. Fully static; no server.
 
@@ -27,7 +30,8 @@ anywhere selects it in every view. Fully static; no server.
     page tables, in ~3-6 ms (`physmap.ts`). Drawn one pixel per page along a Hilbert curve.
 - **Visual inspectors:** `eevdf()` reproduces `pick_eevdf()`'s eligibility test and pick
   (`helpers/sched.ts`); `vmaPages()` classifies every page of every VMA from its PTE and `struct page`
-  (`helpers/pagemap.ts`); `openFiles()` walks fd tables and pipe rings (`helpers/files.ts`). The
+  (`helpers/pagemap.ts`); `userRegion()` / `kernelRegion()` build the address-space map from VMAs, linker
+  symbols and the `pgtable_32_areas.h` layout formulas (`helpers/vamap.ts`); `openFiles()` walks fd tables and pipe rings (`helpers/files.ts`). The
   process selection is shared through `ui/selection.ts`.
 
 ## Build & run
